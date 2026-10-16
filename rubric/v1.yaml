@@ -1,0 +1,121 @@
+# GEMS Central Admissions Desk – call audit rubric.
+# Edit this file to change how calls are scored. Bump `version` whenever you change a criterion,
+# weight or anchor, so old and new scores never mix (scores are stored per version).
+version: v1
+changelog:
+  - v1 (2026-10-16): first machine-readable rubric, from the 10-call pilot (draft v0.1).
+  - v1 (2026-10-16): red-flag rules for fees, uncertain info and process gaps aligned with the confirmed fact sheet.
+
+scale:
+  2: Met
+  1: Partial
+  0: Missed
+  null: N/A – doesn't apply to this call (say why in the note)
+
+criteria:
+  - id: opening
+    name: Opening
+    weight: 1
+    look_for: Greets, gives own name and "GEMS", confirms the parent by name, states why they're calling (web enquiry, visit follow-up), checks it's a good time.
+    met: All of the above, naturally.
+    partial: Missing one or two parts (e.g. never confirms who they're speaking to, or no reason given).
+    missed: Launches straight in without introducing themselves or GEMS.
+
+  - id: discovery
+    name: Discovery
+    weight: 2
+    look_for: Child's name, age/DOB, current school and grade, grade sought, campus/location, and what the parent actually wants (curriculum, daycare, transport, timing). Asks before pitching.
+    met: Captures most of these and at least one "why" (what matters to this parent), before pitching.
+    partial: Captures the basics (age/grade) but misses the parent's needs, or pitches before asking.
+    missed: Captures almost nothing about the child or the parent's needs.
+    na_when: The caller turns out not to be a prospective parent (job seeker, vendor, wrong number) within the first exchanges.
+
+  - id: knowledge
+    name: Knowledge & accuracy
+    weight: 2
+    look_for: Correct campus, curriculum and status; answers what the parent asked; claims match the fact sheet.
+    met: Accurate, specific, consistent; nothing contradicts the fact sheet.
+    partial: Mostly right but vague, says "I'm not sure", gives a figure that shifts during the call, or makes a claim not in the fact sheet.
+    missed: States something wrong (per the fact sheet), or the parent asks about the school and gets no information.
+
+  - id: objections
+    name: Questions & objections
+    weight: 2
+    look_for: Takes concerns seriously (fees, construction, curriculum switch, competing offers, distance, can't visit) and answers or routes them, then checks the parent is satisfied.
+    met: Every concern raised is acknowledged and answered or credibly routed.
+    partial: Concern acknowledged but brushed off, deferred vaguely, or only half-answered.
+    missed: A concern is ignored, or the counsellor gives up at the first "no".
+    na_when: The parent raises no question or concern at all.
+
+  - id: next_step
+    name: Next step secured
+    weight: 3
+    look_for: Campus visit booked with a specific day, time and named counsellor, or a dated callback when a visit isn't possible.
+    met: Visit with day + time (+ who they'll meet), or a callback with a specific day/time agreed with the parent.
+    partial: Next step agreed but vague ("I'll call you back", "someone will contact you"), or visit day without a time.
+    missed: No next step, or a potential future lead (e.g. a younger sibling) is dropped.
+    na_when: Not a prospective parent.
+
+  - id: close
+    name: Close & recap
+    weight: 1
+    look_for: Recaps what was agreed, says what happens next (address, reminder call), leaves a contact, ends warmly.
+    met: Clear recap and next action.
+    partial: Polite close but no recap, or the parent is left without key details.
+    missed: Abrupt end, or the call ends mid-thought with nothing confirmed.
+
+  - id: communication
+    name: Communication
+    weight: 1
+    look_for: Clear and polite, matches the parent's language, listens more than talks, no pitch over ~60 seconds without a check-in, doesn't talk over the parent.
+    met: Conversational and parent-led.
+    partial: One or two long monologues, some talking over, or occasional unclear phrasing.
+    missed: Mostly monologue, rude, dismissive, or pushy.
+
+red_flags:
+  - id: inaccurate_claim
+    name: Inaccurate or unverifiable claim
+    rule: Any claim about GEMS (numbers of schools, history, rankings, results, "every child goes to GEMS") that isn't in the fact sheet or contradicts it.
+  - id: fee_issue
+    name: Fee quoting issue
+    rule: Any fee figure quoted on the phone (policy is to defer fees to the campus visit).
+  - id: uncertain_info
+    name: Uncertain info given to parent
+    rule: Counsellor guesses or says "I'm not sure" about a facility or process (meals, transport, daycare, timings) instead of deferring to the campus counsellor at the visit.
+  - id: crm_data
+    name: CRM data needs fixing
+    rule: Wrong campus on the lead, not actually a parent, duplicate, or other data the CRM should be corrected for.
+  - id: hot_lead_risk
+    name: Hot lead at risk
+    rule: Parent mentions competing offers, a deadline, or strong intent, and the counsellor doesn't act with urgency.
+  - id: missed_future_lead
+    name: Missed future lead
+    rule: A sibling or later-year admission is mentioned but not captured with a follow-up.
+  - id: process_gap
+    name: Process gap
+    rule: The counsellor can't meet a reasonable parent request because of a tool or process limit that has no approved workaround in the fact sheet.
+  - id: conduct
+    name: Conduct
+    rule: Rude, dismissive, pushy, or unprofessional language.
+
+outcomes:
+  - Visit booked
+  - Callback scheduled
+  - Callback – no date
+  - Handed to campus
+  - Not interested
+  - Not a lead
+  - Call dropped / unclear
+
+# CRM call_outcome values the scorer should suggest (must match the CRM Call Log select options).
+crm_outcomes:
+  - Spoke to parent
+  - Asked for follow-up
+  - Did not pick up
+  - Wrong number
+  - Call back later
+
+# Overall score bands for the report.
+bands:
+  good: 75
+  needs_work: 55

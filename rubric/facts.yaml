@@ -1,0 +1,61 @@
+# Approved fact sheet the scorer checks claims against. Anything a counsellor says that isn't here
+# gets flagged as "unverifiable", so filling this in is the fastest way to make knowledge scoring fair.
+# Entries marked "verify: true" are provisional (heard on calls, not yet confirmed by admissions):
+# contradicting them is flagged as unverifiable, not as wrong.
+# Last updated 2026-10-16: fee policy, brand claims, IB wording, unknowns and brochure process confirmed by Jay.
+
+brand:
+  approved:
+    - GEMS Education was founded in Dubai in 1959. ("65+ years" follows from this and is fine.)
+    - Non-numeric descriptions are fine, e.g. "an international education group", "holistic development", "experiential learning".
+  not_approved: Any other numbers about GEMS (count of schools or campuses, countries, students, alumni, years in India,
+    rankings) and sweeping claims such as "every child in Dubai goes to GEMS". Flag as inaccurate_claim.
+
+campuses:   # status: details to be shared by Jay; keep verify: true until then
+  - name: GEMS Modern Academy, Kochi
+    location: Kakkanad, Kochi, Kerala (opposite Infopark Phase 2)
+    status: Open
+    curriculum: CBSE
+    notes: Counsellors said to be unavailable on Saturdays unless there's an event.
+    verify: true
+  - name: GEMS school, Coimbatore
+    location: Coimbatore, Tamil Nadu (Vellakinar area; admission office on site)
+    status: Under construction; admission office open. Admissions for 2027–28.
+    curriculum: CBSE and IB (PYP/MYP continuum)
+    verify: true
+  - name: GEMS school, Indirapuram
+    location: Indirapuram, Ghaziabad (near Shakti Khand)
+    status: Under construction; admission office open.
+    curriculum: CBSE. Approved wording – "CBSE, aligned with an IB-style approach" (allowed).
+    grades: Nursery to grade 8 at opening
+    campus_counsellor: Sonali Thakar
+    verify: true
+  - name: Jodhpur and other campuses
+    status: TO ADD – Jay to share the full campus list with status and curriculum.
+    verify: true
+
+fees:
+  policy: Central desk does NOT quote fees on the phone. The approved answer is that the campus counsellor shares
+    the fee structure at the visit. Quoting any figure (even a rough range) is a fee_issue flag.
+
+facilities_and_unknowns:
+  rule: If a parent asks about meals, daycare, transport or anything the counsellor doesn't know, the correct answer is
+    "the campus counsellor will confirm this at your visit". Deferring like that is correct. Guessing or saying
+    "I'm not sure, maybe..." is an uncertain_info flag.
+  transport: Available (confirm per campus).
+
+process:
+  - The central admissions desk books campus visits with the campus counsellor; fees and the full tour happen at the visit.
+  - The central desk has no WhatsApp. When a parent asks for details, the approved route is to email them the brochure.
+    Not offering the brochure when details are asked for counts against Questions & objections.
+
+# Misheard brand/curriculum words, fixed after transcription (whole words, any case).
+# Don't add place names: a campus must stay exactly as heard so a wrong-campus lead shows up.
+# (Feeding Whisper a glossary of places made it insert campuses nobody said, so that was removed.)
+corrections:
+  Jems: GEMS
+  Jens: GEMS
+  Jams: GEMS
+  Gems: GEMS
+  CDSE: CBSE
+  CBST: CBSE

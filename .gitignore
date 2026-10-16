@@ -1,0 +1,16 @@
+# Raw call data never goes to GitHub. Only the encrypted site in docs/ is published.
+.venv/
+__pycache__/
+calls.json
+recordings/
+transcripts/
+transcripts_v0/
+scores/
+gold/
+work/
+calibration/
+pilot_scores.json
+pilot_ids.json
+audit_report.html
+*.part
+.DS_Store

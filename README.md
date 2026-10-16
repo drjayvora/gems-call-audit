@@ -1,0 +1,58 @@
+# Call quality audit
+
+Pulls call logs and Exotel recordings from the CRM, transcribes them on this Mac (Whisper), has Claude score each call against a rubric inside a Claude Code session (no API key, no API spend), and builds a review page where managers correct the scores. Their corrections become the answer key that keeps the scorer honest as the rubric evolves.
+
+## The loop
+
+```
+pull_calls.py  →  fetch_recordings.py  →  transcribe.py  →  score.py  →  build_report.py
+                                                              ↑              │ managers review in audit_report.html,
+                                         edit rubric/*.yaml   │              ▼ click "Export reviews"
+                                                     calibrate.py  ←  ingest_reviews.py  (gold/ = human answer key)
+```
+
+| Step | Command (from this folder) |
+|---|---|
+| New calls + recordings | `python3 pull_calls.py && python3 fetch_recordings.py` |
+| Transcribe new recordings (local, ~20× real time) | `.venv/bin/python transcribe.py` |
+| Score new calls | Ask Claude in Claude Code: "score the next 10 calls". Claude runs `score.py next --n 10`, reads `work/next.md`, writes `work/results.json` and runs `score.py save work/results.json`, which checks every field against the rubric before saving |
+| Build the review page | `.venv/bin/python build_report.py`, then `python3 -m http.server 8765` in this folder and open http://localhost:8765/audit_report.html (recordings won't play if you open the file directly) |
+| Load reviewers' corrections | `.venv/bin/python ingest_reviews.py ~/Downloads/call-reviews-*.json` |
+| Check scorer vs reviewers | `.venv/bin/python calibrate.py` (add `--include-drafts` to include the 10 unreviewed pilot labels) |
+
+## Improving the scorer
+
+1. **Get ~30 calls human-reviewed** across all counsellors and outcomes. That's the answer key (`gold/`).
+2. Run `calibrate.py`. It shows, per criterion, how often Claude agrees with reviewers and whether it scores high or low (bias), plus outcome and red-flag agreement and the biggest disagreements.
+3. Change one thing: a criterion's anchors in `rubric/v1.yaml` (a wording change is fine within a version), a fact in `rubric/facts.yaml`, or the instructions in `score.py`.
+4. Ask Claude to re-score the reviewed calls (`score.py next --ids gold_ids.json --force`) and re-run `calibrate.py`. Keep the change if agreement improves. `calibration/history.jsonl` keeps every run.
+5. When you change what's being measured (add or remove a criterion, change weights), copy to `rubric/v2.yaml` with `version: v2`. Scores are stored per version, so v1 and v2 never mix.
+
+**Fill in `rubric/facts.yaml` first.** Fee policy, campus status and approved brand claims decide whether "Knowledge & accuracy" is fair. Anything a counsellor says that isn't there gets flagged as unverifiable.
+
+## Files
+
+- `rubric/v1.yaml`: criteria, weights, Met/Partial/Missed anchors, red flags, outcomes.
+- `rubric/facts.yaml`: approved facts, plus brand-word spelling corrections for transcripts (never place names: a Whisper glossary prompt once inserted campuses nobody said).
+- `calls.json`: CRM call logs. `recordings/`: Exotel MP3s. `transcripts/`: Whisper output.
+- `scores/<version>/`: Claude's scores with evidence quotes. `gold/`: human-reviewed scores (`reviewed: true`), or the pilot drafts.
+- Credentials are read from `~/.gems_crm_token` and `~/.gems_exotel_token`. They're never stored in this folder.
+
+## Dual-channel recordings
+
+`transcribe.py` detects stereo recordings automatically and labels each line Counsellor or Parent. The channel order in `CHANNELS` (top of `transcribe.py`) is a best guess. **Check it on the first dual-channel call** and swap it if the labels come out reversed.
+
+## The encrypted website (GitHub Pages)
+
+`docs/` is the published site. It holds only encrypted files, so the repo and the site can be public. Without the team password, nobody can read the call data or play recordings.
+
+- **Publish after scoring:** `.venv/bin/python publish.py`, then commit and push `docs/`. The site updates within a minute or two.
+- **Team password:** created on the first run and stored in `~/.gems_audit_password`. Share it privately, never in the repo.
+- **How it works:** the call data (gzipped JSON) and each recording are encrypted with AES-256-GCM under a random data key in `~/.gems_audit_datakey`. `docs/key.json` holds that key wrapped with a key derived from the password (PBKDF2-SHA256, 600,000 iterations). The browser derives the same key from the password, unwraps the data key and decrypts everything locally. Recording file names are keyed hashes, so they don't reveal call IDs.
+- **"Stay unlocked on this device"** keeps the data key in that browser's storage until someone clicks **Lock**. Leave it off on shared computers.
+- **Changing access:**
+  - `publish.py --new-password` issues a new password.
+  - `publish.py --rotate` also replaces the data key. Use this when someone should lose access.
+
+  Either way, old versions remain in git history and still open with the old password, so treat rotation as protecting **new** data only.
+- **Reviews** are still saved in each reviewer's browser and exported as JSON (`ingest_reviews.py`), because a static site can't store them centrally.
