@@ -22,7 +22,7 @@ if a.cmd == "next":
     else:
         ids = [f[:-5] for f in os.listdir(P("transcripts")) if (calls[f[:-5]]["duration"] or 0) >= a.min_sec]
         ids.sort(key=lambda i: calls[i]["start_time"] or "")
-    ids = [i for i in ids if a.force or not os.path.exists(os.path.join(OUT, i + ".json"))][: a.n]
+    ids = [i for i in ids if os.path.exists(P("transcripts", i + ".json")) and (a.force or not os.path.exists(os.path.join(OUT, i + ".json")))][: a.n]
     os.makedirs(P("work"), exist_ok=True); parts = [f"# Calls to score – rubric {rubric['version']} ({len(ids)} calls)\n\nRubric: rubric/{rubric['version']}.yaml · Facts: rubric/facts.yaml · Save with: score.py save work/results.json\n"]
     for cid in ids:
         c = calls[cid]; t, _ = transcript_text(cid)
@@ -60,4 +60,4 @@ else:
                "score": weighted_score(ratings, rubric), "ratings_num": ratings, **r,
                "lead_details": {k: r.get("lead_details", {}).get(k, "") for k in LEAD}, "speakers": r.get("speakers", "").replace(" ", "")}
         json.dump(rec, open(os.path.join(OUT, r["call"] + ".json"), "w"), ensure_ascii=False, indent=1)
-        print(f"{r['call'][:10]} {rec['score']:>3} · {r['outcome']} · {len(r['red_flags'])} flags")
+        print(f"{r['call'][:10]} {str(rec['score']):>4} · {r['outcome']} · {len(r['red_flags'])} flags")
