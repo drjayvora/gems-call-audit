@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>GEMS Call Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Encode+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="gate" hidden>
+  <form id="gateForm" autocomplete="off">
+    <div class="brand brand-lg"><span class="mark">GEMS</span><span>Call Audit</span></div>
+    <p class="muted">This site is encrypted. Enter the team password to unlock it.</p>
+    <input type="password" id="pw" placeholder="Team password" autocomplete="current-password" required>
+    <label class="check"><input type="checkbox" id="remember"> Stay unlocked on this device</label>
+    <button type="submit" id="unlockBtn" class="btn btn-primary btn-block">Unlock</button>
+    <div class="err" id="gateErr" role="alert"></div>
+  </form>
+</div>
+<header id="top" hidden>
+  <div class="top-inner">
+    <a class="brand" href="#/"><span class="mark">GEMS</span><span>Call Audit</span></a>
+    <nav id="nav">
+      <a href="#/" data-nav="dashboard">Dashboard</a>
+      <a href="#/calls" data-nav="calls">Calls</a>
+      <a href="#/counsellors" data-nav="counsellors">Counsellors</a>
+    </nav>
+    <button class="btn btn-ghost-light" id="lock" hidden>Lock</button>
+  </div>
+</header>
+<main id="view" hidden></main>
+<script src="app.js"></script>
+</body>
+</html>

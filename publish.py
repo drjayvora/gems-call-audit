@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from common import P
-from build_report import build_data
+from build_report import build_data, copy_web
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--out", default=P("docs")); ap.add_argument("--rubric", default="v1")
@@ -57,7 +57,8 @@ for f in os.listdir(os.path.join(a.out, "a")):
 
 open(os.path.join(a.out, "data.enc"), "wb").write(enc(gzip.compress(json.dumps(DATA, ensure_ascii=False).encode(), mtime=0)))
 json.dump(keyjson, open(os.path.join(a.out, "key.json"), "w"))
-open(os.path.join(a.out, "index.html"), "w").write(open(P("report_template.html")).read())   # template with no data = password-gated site
+copy_web(a.out)                                                     # app shell (index.html, app.js, app.css) holds no call data
+json.dump({"mode": "encrypted"}, open(os.path.join(a.out, "site.json"), "w"))
 open(os.path.join(a.out, ".nojekyll"), "w").write("")
 open(os.path.join(a.out, "robots.txt"), "w").write("User-agent: *\nDisallow: /\n")
 size = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(a.out) for f in fs) / 1e6

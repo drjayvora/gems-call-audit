@@ -4,7 +4,8 @@
 # results.json is a list of objects with: call, summary, outcome, crm_outcome_suggested, intent,
 #   ratings {criterion: {rating: "2"|"1"|"0"|"NA", evidence: [{t, quote}], note}}, red_flags [{type, detail, t}],
 #   coaching, lead_details {parent_name, child_name, child_age_or_dob, current_school_grade, grade_sought, campus, needs, siblings},
-#   transcript_quality ("good"|"fair"|"poor"), transcript_issues
+#   transcript_quality ("good"|"fair"|"poor"), transcript_issues,
+#   speakers: one letter per transcript line, C counsellor / P parent / M both / N unclear (skip for dual-channel calls)
 import argparse, datetime, json, os
 from common import P, load_rubric, calls_by_id, resolve, transcript_text, weighted_score
 
@@ -24,7 +25,8 @@ if a.cmd == "next":
     ids = [i for i in ids if a.force or not os.path.exists(os.path.join(OUT, i + ".json"))][: a.n]
     os.makedirs(P("work"), exist_ok=True); parts = [f"# Calls to score – rubric {rubric['version']} ({len(ids)} calls)\n\nRubric: rubric/{rubric['version']}.yaml · Facts: rubric/facts.yaml · Save with: score.py save work/results.json\n"]
     for cid in ids:
-        c = calls[cid]; t, txt = transcript_text(cid)
+        c = calls[cid]; t, _ = transcript_text(cid)
+        txt = "\n".join(f"{i:>3} [{int(g['start'])//60}:{int(g['start'])%60:02d}] {g['speaker'] + ': ' if g.get('speaker') else ''}{g['text']}" for i, g in enumerate(t["segments"]))
         who = (c["caller"] if c["type"] == "Outgoing" else c["receiver"]) or c["caller"] or c["receiver"]
         parts.append(f"\n## {cid}\ncounsellor: {who} · {c['type']} · {c['start_time']} · {int(c['duration'] or 0)}s · CRM outcome: {c['call_outcome'] or '—'} · "
                      f"intent: {c['intent'] or '—'} · speaker labels: {'yes' if any(s.get('speaker') for s in t['segments']) else 'no (mono)'}\n\n{txt}\n")
@@ -46,6 +48,9 @@ else:
         e += [f"flag type {f.get('type')!r}" for f in r.get("red_flags", []) if f.get("type") not in FLAGS]
         if set(r.get("lead_details", {})) - set(LEAD): e.append("lead_details keys")
         if r.get("transcript_quality") not in ("good", "fair", "poor"): e.append("transcript_quality")
+        segs = json.load(open(P("transcripts", cid + ".json")))["segments"]; sp = r.get("speakers", "").replace(" ", "")
+        if not all(g.get("speaker") for g in segs):   # mono: the scorer must label who speaks on each line
+            if len(sp) != len(segs) or set(sp) - set("CPMN"): e.append(f"speakers: need {len(segs)} letters from CPMN, got {len(sp)}")
         return [f"{cid[:10]}: {x}" for x in e]
     for r in items: errs += check(r)
     if errs: raise SystemExit("Not saved – fix these:\n  " + "\n  ".join(errs))
@@ -53,6 +58,6 @@ else:
         ratings = {k: (None if v["rating"] == "NA" else int(v["rating"])) for k, v in r["ratings"].items()}
         rec = {"rubric": rubric["version"], "model": a.scorer, "scored_at": datetime.datetime.now().isoformat(timespec="seconds"),
                "score": weighted_score(ratings, rubric), "ratings_num": ratings, **r,
-               "lead_details": {k: r.get("lead_details", {}).get(k, "") for k in LEAD}}
+               "lead_details": {k: r.get("lead_details", {}).get(k, "") for k in LEAD}, "speakers": r.get("speakers", "").replace(" ", "")}
         json.dump(rec, open(os.path.join(OUT, r["call"] + ".json"), "w"), ensure_ascii=False, indent=1)
         print(f"{r['call'][:10]} {rec['score']:>3} · {r['outcome']} · {len(r['red_flags'])} flags")

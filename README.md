@@ -5,8 +5,8 @@ Pulls call logs and Exotel recordings from the CRM, transcribes them on this Mac
 ## The loop
 
 ```
-pull_calls.py  →  fetch_recordings.py  →  transcribe.py  →  score.py  →  build_report.py
-                                                              ↑              │ managers review in audit_report.html,
+pull_calls.py  →  fetch_recordings.py  →  transcribe.py  →  score.py  →  publish.py
+                                                              ↑              │ managers review on the website,
                                          edit rubric/*.yaml   │              ▼ click "Export reviews"
                                                      calibrate.py  ←  ingest_reviews.py  (gold/ = human answer key)
 ```
@@ -16,7 +16,8 @@ pull_calls.py  →  fetch_recordings.py  →  transcribe.py  →  score.py  → 
 | New calls + recordings | `python3 pull_calls.py && python3 fetch_recordings.py` |
 | Transcribe new recordings (local, ~20× real time) | `.venv/bin/python transcribe.py` |
 | Score new calls | Ask Claude in Claude Code: "score the next 10 calls". Claude runs `score.py next --n 10`, reads `work/next.md`, writes `work/results.json` and runs `score.py save work/results.json`, which checks every field against the rubric before saving |
-| Build the review page | `.venv/bin/python build_report.py`, then `python3 -m http.server 8765` in this folder and open http://localhost:8765/audit_report.html (recordings won't play if you open the file directly) |
+| Preview the site locally (no password) | `.venv/bin/python build_report.py`, then `python3 -m http.server 8765 --directory local_site` and open http://localhost:8765 |
+| Publish the encrypted site | `.venv/bin/python publish.py`, then commit and push `docs/` |
 | Load reviewers' corrections | `.venv/bin/python ingest_reviews.py ~/Downloads/call-reviews-*.json` |
 | Check scorer vs reviewers | `.venv/bin/python calibrate.py` (add `--include-drafts` to include the 10 unreviewed pilot labels) |
 
@@ -56,3 +57,16 @@ pull_calls.py  →  fetch_recordings.py  →  transcribe.py  →  score.py  → 
 
   Either way, old versions remain in git history and still open with the old password, so treat rotation as protecting **new** data only.
 - **Reviews** are still saved in each reviewer's browser and exported as JSON (`ingest_reviews.py`), because a static site can't store them centrally.
+
+## The website
+
+The site is one page with five screens. Unlock once and move between them:
+
+- **Dashboard** (`#/`): team KPIs, rubric performance, talk share by counsellor, the counsellor table, score by day, outcomes, red flags, and calls needing attention.
+- **Calls** (`#/calls`): every audited call, with search and filters (counsellor, outcome, flag, score band, direction) and sortable columns.
+- **Call detail** (`#/call/<id>`): the recording with a who-spoke-when timeline, a transcript that follows playback, the rubric with clickable evidence timestamps, listening and probing metrics, red flags, CRM comparison, lead details, and a review form.
+- **Counsellors** (`#/counsellors`) and **counsellor profile** (`#/counsellor/<id>`): persona, coaching plan, strengths and gaps, rubric vs team, listening dots per call, outcomes, flags and their calls.
+
+**Code:** `web/` (index.html, app.css, app.js). **Data:** `build_report.py::build_data()`. **Personas:** `personas/<counsellor>.json`, written in-session; git-ignored because they're HR-sensitive, and only published encrypted.
+
+**Talk-to-listen:** `metrics.py` computes counsellor talk %, the longest monologue, questions, open questions and parent turns from speaker labels. Dual-channel recordings carry exact labels. For mono recordings the scorer labels each transcript line (`speakers`: C/P/M/N), and the site marks those figures as estimated. Targets are under `listening:` in `rubric/v1.yaml`.

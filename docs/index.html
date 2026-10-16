@@ -1,199 +1,38 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Call Quality Audit</title>
-<style>
-:root{--bg:#f7f7f5;--card:#fff;--ink:#1d1d1b;--mute:#6b6b66;--line:#e4e3de;--hi:#1f7a4d;--mid:#a86b00;--lo:#b3261e;--hib:#e3f3ea;--midb:#fbf0dc;--lob:#fbe5e3;--nab:#eeeeea;--acc:#1f3864;--accb:#e8edf7}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151514;--card:#1f1f1d;--ink:#ecebe6;--mute:#9a9992;--line:#33332f;--hi:#5cc48d;--mid:#e0a63c;--lo:#f08a80;--hib:#18392a;--midb:#3a2e14;--lob:#41201d;--nab:#2a2a27;--acc:#9db4e8;--accb:#1e2738}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-main{max-width:1060px;margin:0 auto;padding:28px 16px 80px}h1{margin:0 0 4px;font-size:24px}h2{font-size:16px;margin:28px 0 10px}
-.lede{color:var(--mute);margin:0 0 18px}a{color:var(--acc)}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}.kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}.kpi span{color:var(--mute);font-size:13px}
-.box{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
-table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}tr:last-child td{border-bottom:0}
-th{font-size:12px;color:var(--mute);font-weight:600}.num{text-align:right;font-variant-numeric:tabular-nums}.c{text-align:center}
-.cell{display:inline-block;min-width:44px;text-align:center;border-radius:6px;padding:1px 6px;font-weight:600;font-variant-numeric:tabular-nums}
-.hi{background:var(--hib);color:var(--hi)}.mid{background:var(--midb);color:var(--mid)}.lo{background:var(--lob);color:var(--lo)}.na{background:var(--nab);color:var(--mute)}
-.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}select,input,textarea,button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
-button{cursor:pointer;background:var(--acc);color:var(--card);border-color:var(--acc);font-weight:600}button.ghost{background:var(--card);color:var(--acc)}
-details.call{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
-details.call>summary{list-style:none;cursor:pointer;padding:10px 14px;display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center}
-details.call>summary::-webkit-details-marker{display:none}.s1{font-weight:600}.s2{color:var(--mute);font-size:13px}
-.tag{font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;margin-left:6px;white-space:nowrap}.tag.rev{background:var(--hib);color:var(--hi)}.tag.draft{background:var(--nab);color:var(--mute)}.tag.edit{background:var(--accb);color:var(--acc)}
-.body{padding:0 14px 14px;border-top:1px solid var(--line)}.meta{color:var(--mute);font-size:13px}audio{width:100%;margin:8px 0}
-.ev{color:var(--mute);font-size:13px;margin-top:2px}.ev i{font-style:normal;color:var(--ink)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}h3{font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--mute);margin:14px 0 4px}
-ul{margin:0;padding-left:18px}.tx{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px}
-.ts{color:var(--mute);font-variant-numeric:tabular-nums;display:inline-block;width:42px}.sp{font-weight:600;margin-right:4px}
-.rv{background:var(--accb);border-radius:10px;padding:10px 12px;margin-top:14px}.rv table td{border-color:transparent;padding:3px 6px}.rv textarea{width:100%;min-height:54px}
-[hidden]{display:none!important}
-#gate{min-height:100vh;display:grid;place-items:center;padding:16px}#gate form{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 24px;width:100%;max-width:380px}
-#gate h1{font-size:20px}#gate input[type=password]{width:100%;padding:9px 10px;margin:14px 0 10px}#gate button{width:100%;padding:9px;margin-top:12px}.err{color:var(--lo);font-size:14px;min-height:20px;margin-top:8px}
-.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}#lock{display:none}
-.flagbox{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px}.empty{color:var(--mute);padding:14px}
-@media(max-width:700px){.two{grid-template-columns:1fr}details.call>summary{grid-template-columns:46px 1fr}details.call>summary .s3{display:none}}
-</style></head><body>
-<div id="gate" hidden><form id="gateForm" autocomplete="off">
- <h1>Call quality audit</h1><p class="lede" style="margin:0">This site is encrypted. Enter the team password to unlock it.</p>
- <input type="password" id="pw" placeholder="Team password" autocomplete="current-password" required>
- <label class="s2"><input type="checkbox" id="remember"> Stay unlocked on this device</label>
- <button type="submit" id="unlockBtn">Unlock</button><div class="err" id="gateErr"></div>
-</form></div>
-<main id="app" hidden>
-<div class="top"><h1>Call quality audit</h1><button class="ghost" id="lock">Lock</button></div>
-<p class="lede" id="lede"></p>
-<div class="kpis" id="kpis"></div>
-<h2>Counsellors × rubric <span class="s2">(average rating as % of full marks)</span></h2>
-<div class="box"><table id="matrix"></table></div>
-<h2>Red flags</h2><div class="box"><table id="flags"></table></div>
-<h2>Calls</h2>
-<div class="bar">
- <select id="fRep"><option value="">All counsellors</option></select>
- <select id="fOut"><option value="">All outcomes</option></select>
- <label><input type="checkbox" id="fFlag"> Flagged only</label>
- <select id="fSort"><option value="score">Lowest score first</option><option value="new">Newest first</option></select>
- <span style="flex:1"></span>
- <input id="who" placeholder="Your name (reviewer)" size="18">
- <button id="exp">Export reviews (<span id="nrev">0</span>)</button>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>GEMS Call Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Encode+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="gate" hidden>
+  <form id="gateForm" autocomplete="off">
+    <div class="brand brand-lg"><span class="mark">GEMS</span><span>Call Audit</span></div>
+    <p class="muted">This site is encrypted. Enter the team password to unlock it.</p>
+    <input type="password" id="pw" placeholder="Team password" autocomplete="current-password" required>
+    <label class="check"><input type="checkbox" id="remember"> Stay unlocked on this device</label>
+    <button type="submit" id="unlockBtn" class="btn btn-primary btn-block">Unlock</button>
+    <div class="err" id="gateErr" role="alert"></div>
+  </form>
 </div>
-<div id="list"></div>
-</main>
-<script>
-const INLINE = /*__DATA__*/null;
-const $ = s => document.querySelector(s), el = (t, a = {}, ...k) => { const e = document.createElement(t); for (const [x, v] of Object.entries(a)) x === "class" ? e.className = v : x.startsWith("on") ? e[x] = v : e.setAttribute(x, v); for (const c of k.flat()) if (c != null) e.append(c.nodeType ? c : String(c)); return e; };
-function start(DATA, audioUrl) {
-$("#app").hidden = false;
-const C = DATA.criteria, FL = DATA.flags, B = DATA.bands, RL = {2: "Met", 1: "Partial", 0: "Missed", null: "N/A"};
-const band = s => s == null ? "na" : s >= B.good ? "hi" : s >= B.needs_work ? "mid" : "lo";
-const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true } catch { return false } } };
-let REV = store.get("callaudit.reviews." + DATA.rubric, {});
-const fmtWhen = s => new Date(s.replace(" ", "T")).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-const calls = DATA.calls, avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
-
-// headline
-const sc = calls.map(c => c.score).filter(x => x != null);
-$("#lede").textContent = `${calls.length} calls · rubric ${DATA.rubric} · ${calls.filter(c => c.source === "model").length} scored by Claude, ${calls.filter(c => c.source === "draft").length} draft · generated ${DATA.generated}`;
-[[Math.round(avg(sc)), "Average score"], [`${Math.round(100 * calls.filter(c => c.outcome === "Visit booked").length / calls.length)}%`, "Visits booked"],
- [calls.reduce((n, c) => n + c.flags.length, 0), "Red flags"], [`${Math.round(100 * calls.filter(c => !c.crm_outcome).length / calls.length)}%`, "No CRM outcome logged"],
- [calls.filter(c => c.gold).length, "Human-reviewed"]].forEach(([b, s]) => $("#kpis").append(el("div", { class: "kpi" }, el("b", {}, b), el("span", {}, s))));
-
-// counsellor x criterion matrix
-const reps = [...new Set(calls.map(c => c.rep))].sort();
-$("#matrix").append(el("tr", {}, el("th", {}, "Counsellor"), el("th", { class: "num" }, "Calls"), el("th", { class: "c" }, "Score"), C.map(c => el("th", { class: "c" }, c.name))));
-const pct = (cs, id) => { const v = cs.map(c => c.ratings[id]?.r).filter(x => x != null); return v.length ? Math.round(50 * avg(v)) : null; };
-for (const r of [...reps, "All"]) {
-  const cs = r === "All" ? calls : calls.filter(c => c.rep === r), s = Math.round(avg(cs.map(c => c.score).filter(x => x != null)));
-  $("#matrix").append(el("tr", {}, el("td", {}, r === "All" ? el("b", {}, "All") : r), el("td", { class: "num" }, cs.length), el("td", { class: "c" }, el("span", { class: "cell " + band(s) }, s)),
-    C.map(c => { const p = pct(cs, c.id); return el("td", { class: "c" }, el("span", { class: "cell " + band(p) }, p == null ? "–" : p)); })));
-}
-// flags
-const fc = {}; calls.forEach(c => c.flags.forEach(f => (fc[f.type] ??= []).push(c)));
-$("#flags").append(el("tr", {}, el("th", {}, "Flag"), el("th", { class: "num" }, "Calls"), el("th", {}, "By counsellor")));
-Object.entries(FL).forEach(([k, n]) => { const cs = fc[k] || []; if (!cs.length) return; const by = {}; cs.forEach(c => by[c.rep] = (by[c.rep] || 0) + 1);
-  $("#flags").append(el("tr", {}, el("td", {}, n), el("td", { class: "num" }, cs.length), el("td", { class: "s2" }, Object.entries(by).map(([r, n]) => `${r} ${n}`).join(" · ")))); });
-
-// filters
-reps.forEach(r => $("#fRep").append(el("option", { value: r }, r))); DATA.outcomes.forEach(o => $("#fOut").append(el("option", { value: o }, o)));
-$("#who").value = store.get("callaudit.reviewer", ""); $("#who").oninput = e => store.set("callaudit.reviewer", e.target.value);
-const nrev = () => $("#nrev").textContent = Object.keys(REV).length; nrev();
-
-function card(c) {
-  const d = el("details", { class: "call" }), tags = [];
-  if (REV[c.id]) tags.push(el("span", { class: "tag edit" }, "your review")); else if (c.gold) tags.push(el("span", { class: "tag rev" }, "reviewed")); else if (c.source === "draft") tags.push(el("span", { class: "tag draft" }, "draft"));
-  d.append(el("summary", {}, el("span", { class: "cell " + band(c.score) }, c.score ?? "–"),
-    el("div", {}, el("div", { class: "s1" }, c.rep, " · ", c.outcome, ...tags), el("div", { class: "s2" }, `${fmtWhen(c.when)} · ${c.type} · ${mmss(c.dur)}`)),
-    el("div", { class: "s2 s3" }, c.flags.length ? `${c.flags.length} flag${c.flags.length > 1 ? "s" : ""}` : "")));
-  d.ontoggle = () => { if (d.open && !d.dataset.r) { d.dataset.r = 1; d.append(body(c)); } };
-  return d;
-}
-function player(c) {
-  const w = el("div", { class: "s2" }, "Loading recording…"), a = el("audio", { controls: "", preload: "metadata" });
-  const help = () => w.replaceChildren(el("div", { class: "s2" }, INLINE ? ["Recording can't load here. Open the report through the local server: run ",
-    el("code", {}, "python3 -m http.server 8765"), " in the call-audit folder, then visit ", el("a", { href: "http://localhost:8765/audit_report.html", target: "_blank" }, "localhost:8765/audit_report.html"), "."]
-    : "Couldn't load this recording."));
-  if (!c.audio && !INLINE) { w.textContent = "No recording for this call."; return w; }
-  if (location.protocol === "data:" || location.protocol === "about:") { help(); return w; }
-  audioUrl(c).then(u => { a.onerror = help; a.src = u; w.replaceChildren(a); }, help); return w;
-}
-function body(c) {
-  const b = el("div", { class: "body" });
-  b.append(el("p", {}, c.summary), el("div", { class: "meta" }, `Call ${c.id}`, c.lead_id ? [" · Lead ", el("a", { href: `https://gemseducation.m.frappe.cloud/crm/leads/${c.lead_id}`, target: "_blank" }, c.lead_id)] : "",
-    ` · CRM outcome: ${c.crm_outcome || "—"}${c.crm_suggest ? ` (suggested: ${c.crm_suggest})` : ""} · Intent: ${c.crm_intent || "—"}${c.intent ? ` (model: ${c.intent})` : ""}`),
-    player(c));
-  const t = el("table", {}); C.forEach(k => { const r = c.ratings[k.id] || {}; t.append(el("tr", {}, el("td", { style: "white-space:nowrap" }, k.name, el("span", { class: "s2" }, ` ×${k.w}`)),
-    el("td", {}, el("span", { class: "cell " + ({ 2: "hi", 1: "mid", 0: "lo" }[r.r] || "na") }, RL[r.r ?? null])),
-    el("td", {}, r.note || "", (r.ev || []).map(e => el("div", { class: "ev" }, `[${e.t}] `, el("i", {}, `“${e.quote}”`)))))); });
-  b.append(el("div", { class: "box" }, t));
-  const two = el("div", { class: "two" });
-  two.append(el("div", {}, el("h3", {}, "Red flags"), c.flags.length ? el("ul", {}, c.flags.map(f => el("li", {}, el("b", {}, FL[f.type] || f.type), f.detail ? ` — ${f.detail}` : "", f.t ? el("span", { class: "s2" }, ` [${f.t}]`) : ""))) : el("div", { class: "s2" }, "None")),
-    el("div", {}, el("h3", {}, "Coaching"), el("div", {}, c.coaching || "—"), c.lead ? [el("h3", {}, "Lead details captured"), el("div", { class: "s2" }, Object.entries(c.lead).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ") || "—")] : ""));
-  b.append(two, el("h3", {}, `Transcript${c.tq ? ` (quality: ${c.tq})` : ""}`),
-    el("div", { class: "tx" }, c.segs.map(([s, sp, x]) => el("div", {}, el("span", { class: "ts" }, mmss(s)), sp ? el("span", { class: "sp" }, sp + ":") : "", x))));
-  b.append(review(c)); return b;
-}
-function review(c) {
-  const base = REV[c.id] || c.gold || { ratings: Object.fromEntries(C.map(k => [k.id, c.ratings[k.id]?.r ?? null])), outcome: c.outcome, flags: c.flags.map(f => f.type), comment: "" };
-  const box = el("div", { class: "rv" }, el("h3", { style: "margin-top:0" }, "Your review — correct anything the scorer got wrong"));
-  const t = el("table", {}), sel = {};
-  C.forEach(k => { const s = el("select", {}, [2, 1, 0, null].map(v => { const o = el("option", { value: String(v) }, RL[v]); if ((base.ratings[k.id] ?? null) === v) o.selected = true; return o; })); sel[k.id] = s; t.append(el("tr", {}, el("td", {}, k.name), el("td", {}, s))); });
-  const out = el("select", {}, DATA.outcomes.map(o => { const e = el("option", { value: o }, o); if (o === base.outcome) e.selected = true; return e; }));
-  t.append(el("tr", {}, el("td", {}, "Outcome"), el("td", {}, out)));
-  const fl = el("div", { class: "flagbox" }, Object.entries(FL).map(([k, n]) => { const i = el("input", { type: "checkbox", value: k }); i.checked = base.flags.includes(k); return el("label", {}, i, " ", n); }));
-  const cm = el("textarea", { placeholder: "Why you changed it (helps improve the rubric)" }); cm.value = base.comment || "";
-  const msg = el("span", { class: "s2" }), save = el("button", { onclick: () => {
-    const who = $("#who").value.trim(); if (!who) { msg.textContent = "Add your name at the top first."; $("#who").focus(); return; }
-    REV[c.id] = { call: c.id, rubric: DATA.rubric, reviewer: who, at: new Date().toISOString(), outcome: out.value, comment: cm.value.trim(),
-      ratings: Object.fromEntries(C.map(k => [k.id, sel[k.id].value === "null" ? null : +sel[k.id].value])), flags: [...fl.querySelectorAll("input:checked")].map(i => i.value) };
-    const ok = store.set("callaudit.reviews." + DATA.rubric, REV); nrev(); msg.textContent = ok ? "Saved in this browser. Export when you're done." : "Saved until you close this tab (this browser blocks storage) — export before closing.";
-  } }, "Save review");
-  box.append(t, el("h3", {}, "Red flags"), fl, el("h3", {}, "Comment"), cm, el("div", { style: "margin-top:8px;display:flex;gap:10px;align-items:center" }, save, msg));
-  return box;
-}
-function render() {
-  let cs = calls.filter(c => (!$("#fRep").value || c.rep === $("#fRep").value) && (!$("#fOut").value || c.outcome === $("#fOut").value) && (!$("#fFlag").checked || c.flags.length));
-  cs.sort($("#fSort").value === "new" ? (a, b) => b.when.localeCompare(a.when) : (a, b) => (a.score ?? 999) - (b.score ?? 999));
-  $("#list").replaceChildren(...(cs.length ? cs.map(card) : [el("div", { class: "empty" }, "No calls match these filters.")]));
-}
-["#fRep", "#fOut", "#fFlag", "#fSort"].forEach(s => $(s).onchange = render); render();
-$("#exp").onclick = () => {
-  const rs = Object.values(REV); if (!rs.length) { alert("No reviews saved yet."); return; }
-  const a = el("a", { href: URL.createObjectURL(new Blob([JSON.stringify({ exported_at: new Date().toISOString(), rubric: DATA.rubric, reviews: rs }, null, 1)], { type: "application/json" })),
-    download: `call-reviews-${DATA.rubric}-${new Date().toISOString().slice(0, 10)}.json` }); document.body.append(a); a.click(); a.remove();
-};
-}
-
-// ---- boot: inline data (local report) or encrypted site (password gate) ----
-if (INLINE) start(INLINE, c => Promise.resolve(`recordings/${c.id}.mp3`));
-else {
-  const KEY = "callaudit.unlock", b64 = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0)), u8b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
-  let DEK;
-  const get = async u => { const r = await fetch(u, { cache: "no-store" }); if (!r.ok) throw new Error(`${u}: ${r.status}`); return r; };
-  const dec = async u => { const b = new Uint8Array(await (await get(u)).arrayBuffer()); return crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(0, 12) }, DEK, b.slice(12)); };
-  async function unwrap(pass) {   // password -> PBKDF2 -> key-encryption key -> data key (throws if the password is wrong)
-    const k = await (await get("key.json")).json();
-    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
-    const kek = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64(k.salt), iterations: k.iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-    return crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(k.iv) }, kek, b64(k.wrapped));
-  }
-  async function open(raw) {
-    DEK = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
-    const gz = await dec("data.enc");
-    const data = JSON.parse(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
-    $("#gate").hidden = true; $("#lock").style.display = "inline-block";
-    $("#lock").onclick = () => { try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch {} location.reload(); };
-    start(data, c => dec(`a/${c.audio}.enc`).then(b => URL.createObjectURL(new Blob([b], { type: "audio/mpeg" }))));
-  }
-  const showGate = msg => { $("#gate").hidden = false; $("#gateErr").textContent = msg || ""; $("#pw").focus(); };
-  $("#gateForm").onsubmit = async e => {
-    e.preventDefault(); const btn = $("#unlockBtn"); btn.disabled = true; btn.textContent = "Unlocking…"; $("#gateErr").textContent = "";
-    let raw;
-    try { raw = await unwrap($("#pw").value); }
-    catch (err) { btn.disabled = false; btn.textContent = "Unlock"; return showGate(err instanceof DOMException ? "Wrong password." : "Couldn't reach the site's data. Try again."); }
-    try { const v = u8b64(raw); (($("#remember").checked) ? localStorage : sessionStorage).setItem(KEY, v); } catch {}
-    try { await open(raw); } catch { btn.disabled = false; btn.textContent = "Unlock"; showGate("Unlocked, but the data couldn't be decrypted. The site may be mid-update; reload in a minute."); }
-  };
-  let saved = null; try { saved = sessionStorage.getItem(KEY) || localStorage.getItem(KEY); } catch {}
-  if (saved) open(b64(saved)).catch(() => { try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch {} showGate("Please enter the password again."); });
-  else showGate();
-}
-</script></body></html>
+<header id="top" hidden>
+  <div class="top-inner">
+    <a class="brand" href="#/"><span class="mark">GEMS</span><span>Call Audit</span></a>
+    <nav id="nav">
+      <a href="#/" data-nav="dashboard">Dashboard</a>
+      <a href="#/calls" data-nav="calls">Calls</a>
+      <a href="#/counsellors" data-nav="counsellors">Counsellors</a>
+    </nav>
+    <button class="btn btn-ghost-light" id="lock" hidden>Lock</button>
+  </div>
+</header>
+<main id="view" hidden></main>
+<script src="app.js"></script>
+</body>
+</html>

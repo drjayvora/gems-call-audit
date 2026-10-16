@@ -119,3 +119,10 @@ crm_outcomes:
 bands:
   good: 75
   needs_work: 55
+
+# Listening & probing targets, measured from who-spoke-when (not a scored criterion; shown on calls and counsellor pages).
+# Counsellor talk share = counsellor speaking time / all speaking time. Good discovery calls let the parent talk.
+listening:
+  talk_pct: {good_max: 55, watch_max: 65}        # % of speaking time taken by the counsellor
+  monologue_sec: {good_max: 60, watch_max: 90}    # longest uninterrupted counsellor stretch
+  open_questions_min: 4                           # open questions (what/how/why/tell me…) per call, for calls ≥ 2 min
