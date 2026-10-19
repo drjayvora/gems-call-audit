@@ -10,13 +10,13 @@ WEB = P("web")
 rep_id = lambda email: (email or "unknown").split("@")[0]
 rep_name = lambda email: rep_id(email).replace(".", " ").title()
 
-def build_data(version="v1"):
+def build_data(version="v1", everyone=False):   # everyone: every caller, ignoring the config.yaml counsellor list
     rubric, _ = load_rubric(version); calls = calls_by_id(); SD = P("scores", rubric["version"])
     ld = lambda d, f: json.load(open(os.path.join(d, f)))
     model = {f[:-5]: ld(SD, f) for f in os.listdir(SD) if f.endswith(".json") and not f.startswith("_")} if os.path.isdir(SD) else {}
     gold = {f[:-5]: ld(P("gold"), f) for f in os.listdir(P("gold")) if f.endswith(".json")} if os.path.isdir(P("gold")) else {}
     cfg = yaml.safe_load(open(P("config.yaml"))) if os.path.exists(P("config.yaml")) else {}
-    allow = set(cfg.get("counsellors") or []); min_sec = cfg.get("min_audit_sec", 30)
+    allow = set() if everyone else set(cfg.get("counsellors") or []); min_sec = cfg.get("min_audit_sec", 30)
     owner = lambda c: rep_id((c["caller"] if c["type"] == "Outgoing" else c["receiver"]) or c["caller"] or c["receiver"])
     rows, reps = [], {}
     for cid in sorted(set(model) | set(gold)):

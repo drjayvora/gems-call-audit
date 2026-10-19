@@ -45,17 +45,28 @@ pull_calls.py  →  fetch_recordings.py  →  transcribe.py  →  score.py  → 
 
 ## The encrypted website (GitHub Pages)
 
-`docs/` is the published site. It holds only encrypted files, so the repo and the site can be public. Without the team password, nobody can read the call data or play recordings.
+`docs/` is the published site. It holds only encrypted files, so the repo and the site can be public. Without a password, nobody can read the call data or play recordings.
+
+**Logins:** the sign-in screen has a list: **Corporate (all schools)** plus one entry per school, each with its own password.
+- Corporate sees every call, including the central desk.
+- A school sees only calls made by its own team. The team comes from the CRM: each user's User Permission on CRM Territory, the same setting that limits which school they see in the CRM. A user with two schools shows in both. `publish.py` reads it fresh every time, so fixing a mapping in the CRM fixes the site on the next publish.
+
+Callers with no school in the CRM (the central desk) are visible to corporate only. To add someone the CRM doesn't map, list them in `config.yaml`:
+
+```yaml
+schools:
+  GEMS Millennium School - Indirapuram: [neha.s]   # CRM territory: [CRM user id = email before the @]
+```
 
 - **Publish after scoring:** `.venv/bin/python publish.py`, then commit and push `docs/`. The site updates within a minute or two.
-- **Team password:** created on the first run and stored in `~/.gems_audit_password`. Share it privately, never in the repo.
-- **How it works:** the call data (gzipped JSON) and each recording are encrypted with AES-256-GCM under a random data key in `~/.gems_audit_datakey`. `docs/key.json` holds that key wrapped with a key derived from the password (PBKDF2-SHA256, 600,000 iterations). The browser derives the same key from the password, unwraps the data key and decrypts everything locally. Recording file names are keyed hashes, so they don't reveal call IDs.
-- **"Stay unlocked on this device"** keeps the data key in that browser's storage until someone clicks **Lock**. Leave it off on shared computers.
+- **Passwords:** `.venv/bin/python publish.py --passwords` prints them. Corporate's is `~/.gems_audit_password` (the original team password). A school's password is created the first time a user is mapped to it, and all of them are kept in `~/.gems_audit_schools.json`. Share them privately, never in the repo.
+- **How it works:** each school's calls and recordings are encrypted with AES-256-GCM under that school's own data key. Central desk calls use a key only corporate holds. `docs/k/<login>.json` holds a login's data keys, wrapped with a key derived from its password (PBKDF2-SHA256, 600,000 iterations). The browser derives the same key, unwraps that login's keys and decrypts locally. A school password can't open another school's data or recordings. Recording file names are keyed hashes, so they don't reveal call IDs.
+- **"Stay unlocked on this device"** keeps that login's keys in the browser until someone clicks **Lock**. Leave it off on shared computers.
 - **Changing access:**
-  - `publish.py --new-password` issues a new password.
-  - `publish.py --rotate` also replaces the data key. Use this when someone should lose access.
+  - `publish.py --new-password "GMS Indirapuram"` (or `corporate`) issues a new password, and a new data key, for one login.
+  - `publish.py --rotate` replaces every key and password.
 
-  Either way, old versions remain in git history and still open with the old password, so treat rotation as protecting **new** data only.
+  Either way, old versions remain in git history and still open with the old password, so treat a change as protecting **new** data only.
 - **Reviews** are still saved in each reviewer's browser and exported as JSON (`ingest_reviews.py`), because a static site can't store them centrally.
 
 ## The website

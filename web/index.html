@@ -8,14 +8,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Encode+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.png">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div id="gate" hidden>
   <form id="gateForm" autocomplete="off">
     <div class="brand brand-lg"><span class="mark">GEMS</span><span>Call Audit</span></div>
-    <p class="muted">This site is encrypted. Enter the team password to unlock it.</p>
-    <input type="password" id="pw" placeholder="Team password" autocomplete="current-password" required>
+    <p class="muted">Pick your login and enter its password.</p>
+    <select id="login" aria-label="Login" hidden></select>
+    <input type="password" id="pw" placeholder="Password" autocomplete="current-password" required>
     <label class="check"><input type="checkbox" id="remember"> Stay unlocked on this device</label>
     <button type="submit" id="unlockBtn" class="btn btn-primary btn-block">Unlock</button>
     <div class="err" id="gateErr" role="alert"></div>
@@ -29,6 +31,7 @@
       <a href="#/calls" data-nav="calls">Calls</a>
       <a href="#/counsellors" data-nav="counsellors">Counsellors</a>
     </nav>
+    <span class="who" id="who" hidden></span>
     <button class="btn btn-ghost-light" id="lock" hidden>Lock</button>
   </div>
 </header>
