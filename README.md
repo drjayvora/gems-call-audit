@@ -62,7 +62,9 @@ schools:
 - **Passwords:** `.venv/bin/python publish.py --passwords` prints them. Corporate's is `~/.gems_audit_password` (the original team password). A school's password is created the first time a user is mapped to it, and all of them are kept in `~/.gems_audit_schools.json`. Share them privately, never in the repo.
 - **How it works:** each school's calls and recordings are encrypted with AES-256-GCM under that school's own data key. Central desk calls use a key only corporate holds. `docs/k/<login>.json` holds a login's data keys, wrapped with a key derived from its password (PBKDF2-SHA256, 600,000 iterations). The browser derives the same key, unwraps that login's keys and decrypts locally. A school password can't open another school's data or recordings. Recording file names are keyed hashes, so they don't reveal call IDs.
 - **"Stay unlocked on this device"** keeps that login's keys in the browser until someone clicks **Lock**. Leave it off on shared computers.
+- **Password style:** the school's town plus 4 digits (e.g. `kochi4821`), and `gems` plus 4 digits for corporate, so they're easy to share. Short passwords can be guessed by someone who copies the site's key files and tries every number, so change a school's password if it spreads beyond the school.
 - **Changing access:**
+  - `publish.py --simple-passwords` gives every login a new password and keeps the data keys.
   - `publish.py --new-password "GMS Indirapuram"` (or `corporate`) issues a new password, and a new data key, for one login.
   - `publish.py --rotate` replaces every key and password.
 
