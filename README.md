@@ -70,3 +70,28 @@ The site is one page with five screens. Unlock once and move between them:
 **Code:** `web/` (index.html, app.css, app.js). **Data:** `build_report.py::build_data()`. **Personas:** `personas/<counsellor>.json`, written in-session; git-ignored because they're HR-sensitive, and only published encrypted.
 
 **Talk-to-listen:** `metrics.py` computes counsellor talk %, the longest monologue, questions, open questions and parent turns from speaker labels. Dual-channel recordings carry exact labels. For mono recordings the scorer labels each transcript line (`speakers`: C/P/M/N), and the site marks those figures as estimated. Targets are under `listening:` in `rubric/v1.yaml`.
+
+## The sign-in portal (Supabase)
+
+The portal replaces the shared team password with personal sign-in. People type their @gemsedu.in email and get a 6-digit code by email; nobody has a password. What each person sees is enforced by the database (row-level security in `portal/schema.sql`), not by the page:
+
+| Role | Sees |
+|---|---|
+| Admin | Everything, plus the **Admin** screen: add users, pick their role, tick their schools, switch them off, map each caller to a school and their Exotel numbers |
+| Corporate | Every school |
+| Principal | Calls made by the team of the schools ticked for them (callers mapped to those schools on the Admin screen) |
+| Counsellor | Their own calls, matched by email (arya.suresh@gemsedu.in sees caller `arya.suresh`) |
+
+A call belongs to its caller's school, so re-mapping a caller on the Admin screen applies at once. Callers with no school (the central desk) are seen by corporate and admin only. Recordings sit in a private storage bucket and play through short-lived signed links. Reviews are saved to the database per reviewer instead of being exported.
+
+**Setting it up (once):**
+1. Create a Supabase project (region: Mumbai). In **SQL editor**, run `portal/schema.sql`.
+2. **Authentication → Providers → Email:** turn email on, turn **Allow new users to sign up** off (only people the admin adds can sign in). **Authentication → Email templates → Magic link:** make the body show the code, e.g. `Your GEMS Call Audit code is {{ .Token }}`.
+3. **Authentication → SMTP:** add a real mail sender (e.g. the GEMS Office 365 account or Resend). Supabase's built-in sender only allows a few emails an hour.
+4. Deploy the admin function: `supabase functions deploy admin` (from `portal/`, with `supabase link`).
+5. Add yourself under **Authentication → Users → Add user** (auto-confirm), then run the "first admin" insert at the end of `schema.sql`.
+6. On the Mac, save `~/.gems_portal.json` with `url`, `anon_key` and `service_key` (Project settings → API), `chmod 600`.
+
+**Each refresh:** after scoring, `.venv/bin/python sync_portal.py` uploads calls, callers, personas and new recordings. To switch the GitHub Pages site from the shared-password version to the portal, run `.venv/bin/python publish.py --portal` once and push `docs/`.
+
+**Code:** `web/app.js` (`bootPortal`, `enter`, `viewAdmin`), `portal/schema.sql`, `portal/functions/admin/index.ts`, `sync_portal.py`.

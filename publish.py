@@ -5,6 +5,8 @@
 #   publish.py --new-password      generate a new team password (old password stops working for new publishes)
 #   publish.py --rotate            new data key AND new password; use when someone should lose access
 #   publish.py --out DIR --password-file F --key-file K    build elsewhere (e.g. a test site)
+#   publish.py --portal            switch the site to the sign-in portal: only the app shell is published, the calls live in
+#                                  Supabase (sync_portal.py). Reads url and anon_key from ~/.gems_portal.json.
 # Password: ~/.gems_audit_password (created on first run). Data key: ~/.gems_audit_datakey. Both chmod 600, never in git.
 import argparse, base64, gzip, hashlib, hmac, json, os, secrets, shutil
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -18,7 +20,19 @@ ap.add_argument("--out", default=P("docs")); ap.add_argument("--rubric", default
 ap.add_argument("--password-file", default=os.path.expanduser("~/.gems_audit_password"))
 ap.add_argument("--key-file", default=os.path.expanduser("~/.gems_audit_datakey"))
 ap.add_argument("--new-password", action="store_true"); ap.add_argument("--rotate", action="store_true")
+ap.add_argument("--portal", action="store_true")
 a = ap.parse_args()
+
+if a.portal:   # the anon key is meant to be public: the database's row-level security decides what each person sees
+    cfg = json.load(open(os.path.expanduser("~/.gems_portal.json")))
+    for f in ("data.enc", "key.json"):
+        if os.path.exists(os.path.join(a.out, f)): os.remove(os.path.join(a.out, f))
+    shutil.rmtree(os.path.join(a.out, "a"), ignore_errors=True)
+    copy_web(a.out)
+    json.dump({"mode": "portal", "url": cfg["url"], "anon_key": cfg["anon_key"]}, open(os.path.join(a.out, "site.json"), "w"))
+    open(os.path.join(a.out, ".nojekyll"), "w").write("")
+    open(os.path.join(a.out, "robots.txt"), "w").write("User-agent: *\nDisallow: /\n")
+    raise SystemExit(f"{a.out}: portal shell published (sign-in via {cfg['url']}). Run sync_portal.py to load the calls.")
 ITER = 600_000
 b64 = lambda b: base64.b64encode(b).decode()
 

@@ -1,5 +1,6 @@
-/* GEMS Call Audit – single-page app. Screens: #/ dashboard · #/calls · #/call/<id> · #/counsellors · #/counsellor/<id>
-   Data comes from data.json (local, plain) or data.enc (GitHub Pages, AES-GCM, unlocked with the team password).
+/* GEMS Call Audit – single-page app. Screens: #/ dashboard · #/calls · #/call/<id> · #/counsellors · #/counsellor/<id> · #/admin
+   Data comes from data.json (local, plain), data.enc (GitHub Pages, AES-GCM, unlocked with the team password),
+   or the portal (Supabase: each person signs in and the database returns only the schools they may see).
    Design rule: visuals first, words second – short labels, details on hover or behind "show more". */
 "use strict";
 const $ = s => document.querySelector(s);
@@ -29,6 +30,10 @@ const fmtWhen = s => dt(s).toLocaleString("en-IN", { day: "numeric", month: "sho
 const initials = n => n.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
 let D, AUDIO_URL, AGG;
+let SB = null, ME = null, ALL = null, SCHOOLS = {}, MYREV = {};   // portal mode only
+const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+const schoolName = id => SCHOOLS[id] || id || "No school";
+const multiSchool = () => SB && new Set(ALL.calls.map(c => c.school)).size > 1;
 const RATING = { 2: ["Met", "good"], 1: ["Partly", "watch"], 0: ["Missed", "poor"], null: ["N/A", "na"] };
 const band3 = (v, good, ok) => v == null ? "na" : v >= good ? "good" : v >= ok ? "watch" : "poor";
 const scoreBand = s => band3(s, D.bands.good, D.bands.needs_work);
@@ -116,6 +121,7 @@ function sortableTable(cols, rows, { initial, rowHref } = {}) {
 const callCols = (o = {}) => [
   { key: "when", label: "When", sort: c => c.when, desc: true, cell: c => h("span", { class: "num" }, fmtWhen(c.when)) },
   o.noRep ? null : { key: "rep", label: "Counsellor", sort: c => repName(c.rep), cell: c => first(c.rep) },
+  multiSchool() && !$("#schoolPick").value ? { key: "school", label: "School", cls: "hide-sm", sort: c => schoolName(c.school), cell: c => schoolName(c.school) } : null,
   { key: "outcome", label: "Outcome", sort: c => c.outcome, cell: c => h("span", { class: "out" }, h("i", { style: `background:${OUT_COLORS[c.outcome] || "#ccc"}` }), c.outcome) },
   { key: "dur", label: "Length", cls: "r hide-sm", sort: c => c.dur, cell: c => h("span", { class: "num" }, mmss(c.dur)) },
   { key: "talk", label: "Talk", cls: "r", sort: c => c.metrics?.counsellor_talk_pct, cell: c => c.metrics ? pill(`${c.metrics.counsellor_talk_pct}%`, talkBand(c.metrics.counsellor_talk_pct)) : "–" },
@@ -284,7 +290,9 @@ const notFound = () => [h("h1", {}, "Not found"), h("p", {}, h("a", { href: "#/"
 
 /* ---------- reviews (kept in this browser, exported as JSON → ingest_reviews.py) ---------- */
 const REV_KEY = () => "callaudit.reviews." + D.rubric;
+const revAll = () => SB ? MYREV : store.get(REV_KEY(), {});
 function exportButton() {
+  if (SB) return null;   // portal reviews are saved to the database, nothing to export
   const n = Object.keys(store.get(REV_KEY(), {})).length;
   return n ? h("button", { class: "btn btn-outline", onclick: () => {
     const rs = Object.values(store.get(REV_KEY(), {}));
@@ -293,11 +301,11 @@ function exportButton() {
   } }, `Export ${n} review${n === 1 ? "" : "s"}`) : null;
 }
 function reviewCard(c) {
-  const saved = store.get(REV_KEY(), {})[c.id], base = saved || c.gold || { ratings: Object.fromEntries(D.criteria.map(k => [k.id, c.ratings[k.id]?.r ?? null])), outcome: c.outcome, flags: c.flags.map(f => f.type), comment: "" };
+  const saved = revAll()[c.id], base = saved || c.gold || { ratings: Object.fromEntries(D.criteria.map(k => [k.id, c.ratings[k.id]?.r ?? null])), outcome: c.outcome, flags: c.flags.map(f => f.type), comment: "" };
   const sel = {}; const rows = D.criteria.map(k => { const s = h("select", {}, [2, 1, 0, null].map(v => { const o = h("option", { value: String(v) }, RATING[v][0]); if ((base.ratings[k.id] ?? null) === v) o.selected = true; return o; })); sel[k.id] = s; return h("tr", {}, h("td", {}, k.name), h("td", {}, s)); });
   const out = h("select", {}, D.outcomes.map(o => { const e = h("option", { value: o }, o); if (o === base.outcome) e.selected = true; return e; }));
   const fl = h("div", { class: "flagbox" }, Object.entries(D.flags).map(([k, n]) => { const i = h("input", { type: "checkbox", value: k }); i.checked = base.flags.includes(k); return h("label", {}, i, " ", n); }));
-  const who = h("input", { type: "text", placeholder: "Your name", value: store.get("callaudit.reviewer", "") });
+  const who = h("input", { type: "text", placeholder: "Your name", value: SB ? ME.name || ME.email : store.get("callaudit.reviewer", ""), hidden: !!SB });
   const cm = h("textarea", { placeholder: "What did the audit get wrong?" }); cm.value = base.comment || "";
   const msg = h("span", { class: "muted small" });
   return h("details", { class: "card review" }, h("summary", {}, h("b", {}, saved ? "✓ Your review" : "✎ Correct this audit")),
@@ -305,9 +313,11 @@ function reviewCard(c) {
     h("div", { style: "display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap" }, who, h("button", { class: "btn btn-primary", onclick: () => {
       if (!who.value.trim()) { msg.textContent = "Add your name first."; who.focus(); return; }
       store.set("callaudit.reviewer", who.value.trim());
-      const all = store.get(REV_KEY(), {});
-      all[c.id] = { call: c.id, rubric: D.rubric, reviewer: who.value.trim(), at: new Date().toISOString(), outcome: out.value, comment: cm.value.trim(),
+      const all = revAll();
+      const r = { call: c.id, rubric: D.rubric, reviewer: who.value.trim(), at: new Date().toISOString(), outcome: out.value, comment: cm.value.trim(),
         ratings: Object.fromEntries(D.criteria.map(k => [k.id, sel[k.id].value === "null" ? null : +sel[k.id].value])), flags: [...fl.querySelectorAll("input:checked")].map(i => i.value) };
+      if (SB) { msg.textContent = "Saving…"; SB.from("reviews").upsert({ call_id: c.id, reviewer: ME.id, data: r }).then(({ error }) => { if (!error) all[c.id] = r; msg.textContent = error ? "Couldn't save. Try again." : "Saved."; }); return; }
+      all[c.id] = r;
       msg.textContent = store.set(REV_KEY(), all) ? "Saved. Export it from the Calls page." : "Couldn't save (browser storage is blocked).";
     } }, "Save"), msg));
 }
@@ -317,7 +327,9 @@ function route() {
   const [path, query] = (location.hash.slice(1) || "/").split("?"); const parts = path.split("/").filter(Boolean);
   const q = new URLSearchParams(query || ""); const view = $("#view");
   let nodes, nav;
-  if (!parts.length) { nodes = viewDashboard(); nav = "dashboard"; }
+  if (parts[0] === "admin") { nodes = viewAdmin(); nav = "admin"; }
+  else if (!D.calls.length) nodes = [h("h1", {}, "No calls yet"), h("p", { class: "muted" }, SB && ME.role === "principal" ? "No audited calls for your school yet." : "No audited calls have been published yet.")];
+  else if (!parts.length) { nodes = viewDashboard(); nav = "dashboard"; }
   else if (parts[0] === "calls") { nodes = viewCalls(q); nav = "calls"; }
   else if (parts[0] === "call") { nodes = viewCall(parts[1]); nav = "calls"; }
   else if (parts[0] === "counsellors") { nodes = viewCounsellors(); nav = "counsellors"; }
@@ -326,7 +338,7 @@ function route() {
   document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === nav));
   view.querySelectorAll("audio").forEach(a => { a.pause(); if (a.src.startsWith("blob:")) URL.revokeObjectURL(a.src); });
   view.replaceChildren(...[nodes].flat().filter(Boolean)); window.scrollTo(0, 0);
-  document.title = `${parts[0] === "counsellor" ? repName(parts[1]) : parts[0] === "call" ? "Call" : { dashboard: "Dashboard", calls: "Calls", counsellors: "Counsellors" }[nav] || "Not found"} · GEMS Call Audit`;
+  document.title = `${parts[0] === "counsellor" ? repName(parts[1]) : parts[0] === "call" ? "Call" : { dashboard: "Dashboard", calls: "Calls", counsellors: "Counsellors", admin: "Admin" }[nav] || "Not found"} · GEMS Call Audit`;
 }
 function start(data, audioUrl) {
   D = data; AUDIO_URL = audioUrl; AGG = aggregate();
@@ -334,10 +346,177 @@ function start(data, audioUrl) {
   window.addEventListener("hashchange", route); route();
 }
 
+/* ---------- portal: sign-in, school picker, admin ---------- */
+const sbErr = async (error, fallback) => {   // a function's own message ({ error }) when it sent one
+  try { return (await error.context.json()).error || fallback; } catch { return error?.message || fallback; }
+};
+function setSchool(s) {
+  D.calls = s ? ALL.calls.filter(c => c.school === s) : ALL.calls;
+  const reps = new Set(D.calls.map(c => c.rep));
+  D.counsellors = Object.fromEntries(Object.entries(ALL.counsellors).filter(([id]) => reps.has(id)));
+  AGG = aggregate(); store.set("callaudit.school", s); route();
+}
+
+async function bootPortal(cfg) {
+  // Sign-in is a one-time code emailed to a @gemsedu.in address: no passwords to set, forget or reset.
+  const form = $("#authForm"), email = $("#authEmail"), code = $("#authCode"), btn = $("#authBtn"), sw = $("#authSwitch");
+  const err = t => { $("#authErr").textContent = t || ""; };
+  let pane;
+  const show = (p, text, e) => {
+    pane = p; email.hidden = p === "code"; code.hidden = p !== "code"; email.required = p === "email"; code.required = p === "code";
+    btn.textContent = p === "code" ? "Sign in" : "Email me a code"; btn.disabled = false; sw.parentElement.hidden = p !== "code";
+    $("#authMsg").textContent = text || "Sign in with your GEMS email. We'll email you a 6-digit code.";
+    err(e); $("#gate").hidden = false; $("#gateForm").hidden = true; form.hidden = false; (p === "code" ? code : email).focus();
+  };
+  try { await new Promise((ok, no) => document.head.append(h("script", { src: SUPABASE_JS, onload: ok, onerror: no }))); }
+  catch { return show("email", "", "Couldn't load the sign-in. Check your connection and reload."); }
+  SB = supabase.createClient(cfg.url, cfg.anon_key);
+  sw.onclick = e => { e.preventDefault(); code.value = ""; show("email"); };
+  form.onsubmit = async e => {
+    e.preventDefault(); err(); btn.disabled = true;
+    const addr = email.value.trim().toLowerCase();
+    if (pane === "email") {
+      if (!addr.endsWith("@gemsedu.in")) { btn.disabled = false; return err("Use your @gemsedu.in email."); }
+      const { error } = await SB.auth.signInWithOtp({ email: addr, options: { shouldCreateUser: false } });   // only people the admin added
+      if (error) { btn.disabled = false; return err(/signup|not allowed|not found/i.test(error.message) ? "This email doesn't have access. Ask the admin to add you." : /rate|seconds/i.test(error.message) ? "Please wait a minute before asking for another code." : error.message); }
+      return show("code", `We've emailed a code to ${addr}. Enter it below.`);
+    }
+    const { error } = await SB.auth.verifyOtp({ email: addr, token: code.value.replace(/\s/g, ""), type: "email" });
+    if (error) { btn.disabled = false; return err("That code is wrong or has expired. Check the latest email, or ask for a new code."); }
+    enter(show);
+  };
+  const { data: { session } } = await SB.auth.getSession();
+  if (session) return enter(show);
+  show("email");
+}
+
+async function enter(show) {
+  const { data: { user } } = await SB.auth.getUser();
+  const { data: me } = await SB.from("profiles").select("*").eq("id", user?.id).maybeSingle();
+  if (!me || !me.active) { await SB.auth.signOut(); return show("email", "", "This account doesn't have access. Ask the admin to add you."); }
+  ME = me; $("#authBtn").textContent = "Loading…";
+  const [meta, schools, couns, revs, ticks, staff] = await Promise.all([
+    SB.from("meta").select("*"), SB.from("schools").select("*"), SB.from("counsellors").select("*"),
+    SB.from("reviews").select("call_id, data").eq("reviewer", me.id), SB.from("profile_schools").select("school_id").eq("profile_id", me.id),
+    SB.from("staff").select("id, school_id")]);   // a call belongs to its caller's school
+  const repSchool = Object.fromEntries((staff.data || []).map(s => [s.id, s.school_id]));
+  SCHOOLS = Object.fromEntries((schools.data || []).map(s => [s.id, s.short]));
+  const m = (meta.data || []).sort((a, b) => a.rubric.localeCompare(b.rubric, undefined, { numeric: true })).pop();
+  const calls = [];
+  for (let from = 0; m; from += 1000) {   // the API returns at most 1000 rows per request
+    const { data, error } = await SB.from("calls").select("data").eq("rubric", m.rubric).order("at").range(from, from + 999);
+    if (error) return show("email", "", "Couldn't load the calls. Reload to try again.");
+    calls.push(...data.map(r => ({ ...r.data, school: repSchool[r.data.rep] || null })));
+    if (data.length < 1000) break;
+  }
+  const counsellors = Object.fromEntries((couns.data || []).map(r => [r.id, { id: r.id, ...r.data }]));
+  for (const c of calls) counsellors[c.rep] ||= { id: c.rep, name: c.rep_name || c.rep, persona: null, funnel: null };
+  MYREV = Object.fromEntries((revs.data || []).map(r => [r.call_id, r.data]));
+  ALL = { calls, counsellors };
+  const data = { ...(m ? m.data : { criteria: [], flags: {}, outcomes: [], bands: { good: 75, needs_work: 55 }, listening: {} }), generated: m?.generated, calls, counsellors };
+
+  // header: who is signed in, admin link, school picker, sign out
+  $("#who").hidden = false; $("#who").textContent = `${me.name || me.email} · ${{ admin: "Admin", corporate: "Corporate", principal: "Principal", counsellor: "Counsellor" }[me.role]}`;
+  $("#navAdmin").hidden = me.role !== "admin";
+  const mine = me.role === "principal" ? (ticks.data || []).map(t => t.school_id) : me.role === "counsellor" ? [] : [...new Set(calls.map(c => c.school).filter(Boolean))];
+  const pick = $("#schoolPick"), keep = store.get("callaudit.school", "");
+  pick.replaceChildren(h("option", { value: "" }, mine.length === 1 ? schoolName(mine[0]) : me.role === "principal" ? "All my schools" : "All schools"),
+    ...(mine.length > 1 ? mine.sort((a, b) => schoolName(a).localeCompare(schoolName(b))).map(s => h("option", { value: s }, schoolName(s))) : []));
+  pick.hidden = !mine.length; pick.value = mine.includes(keep) && mine.length > 1 ? keep : ""; pick.onchange = () => setSchool(pick.value);
+  $("#lock").hidden = false; $("#lock").textContent = "Sign out";
+  $("#lock").onclick = async () => { await SB.auth.signOut(); location.hash = ""; location.reload(); };
+  start(data, c => SB.storage.from("recordings").createSignedUrl(`${c.id}.mp3`, 3600).then(({ data, error }) => { if (error) throw error; return data.signedUrl; }));
+  if (pick.value) setSchool(pick.value);
+}
+
+function viewAdmin() {
+  if (ME?.role !== "admin") return notFound();
+  const host = h("div", {}, h("p", { class: "muted" }, "Loading…"));
+  loadAdmin(host);
+  return [h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Admin"), h("p", { class: "muted" }, "Who can sign in, which schools they see, and which school each caller belongs to."))), host];
+}
+
+async function loadAdmin(host) {
+  const [u, t, sc, st] = await Promise.all([SB.from("profiles").select("*").order("name"), SB.from("profile_schools").select("*"),
+    SB.from("schools").select("*").order("short"), SB.from("staff").select("*").order("name")]);
+  if (u.error || sc.error) return host.replaceChildren(h("p", { class: "err" }, "Couldn't load the admin data. Reload to try again."));
+  const schools = sc.data, ticks = {};
+  (t.data || []).forEach(x => (ticks[x.profile_id] ||= []).push(x.school_id));
+  const formHost = h("div", {}), reload = () => loadAdmin(host);
+  const edit = user => { formHost.replaceChildren(userForm(user, schools, ticks[user?.id] || [], reload, () => formHost.replaceChildren())); formHost.scrollIntoView({ behavior: "smooth" }); };
+  const roleTxt = { admin: "Admin", corporate: "Corporate", principal: "Principal", counsellor: "Counsellor" };
+  host.replaceChildren(
+    h("section", { class: "card" }, h("div", { class: "page-head" }, h("h2", {}, `Users (${u.data.length})`), h("button", { class: "btn btn-primary", onclick: () => edit(null) }, "+ Add user")),
+      formHost,
+      h("div", { class: "table-wrap" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Name", "Email", "Role", "Schools", ""].map(x => h("th", {}, x)))),
+        h("tbody", {}, u.data.map(x => h("tr", {},
+          h("td", {}, h("b", {}, x.name || "–"), x.active ? null : h("span", { class: "tag off", style: "margin-left:6px" }, "Switched off")),
+          h("td", {}, x.email), h("td", {}, roleTxt[x.role]),
+          h("td", {}, x.role === "principal" ? (ticks[x.id] || []).map(s => h("span", { class: "tag" }, schoolName(s))) : h("span", { class: "muted small" }, x.role === "counsellor" ? "Own calls" : "All schools")),
+          h("td", {}, h("button", { class: "btn btn-outline", onclick: () => edit(x) }, "Edit")))))))),
+    staffCard(st.data || [], schools));
+}
+
+function userForm(user, schools, ticked, done, cancel) {
+  const name = h("input", { type: "text", value: user?.name || "", required: true }), email = h("input", { type: "email", value: user?.email || "", placeholder: "name@gemsedu.in", required: true, disabled: !!user });
+  const role = h("select", {}, [["principal", "Principal: their team at the schools ticked below"], ["counsellor", "Counsellor: only their own calls"], ["corporate", "Corporate: all schools"], ["admin", "Admin: all schools, and manages users"]]
+    .map(([v, t]) => { const o = h("option", { value: v }, t); if ((user?.role || "principal") === v) o.selected = true; return o; }));
+  const boxes = schools.map(s => { const i = h("input", { type: "checkbox", value: s.id }); i.checked = ticked.includes(s.id); return h("label", {}, i, s.short); });
+  const tickWrap = h("label", {}, "Schools", h("div", { class: "school-ticks" }, boxes));
+  const active = h("input", { type: "checkbox" }); active.checked = user ? user.active : true;
+  const msg = h("div", { class: "err" }), save = h("button", { type: "submit", class: "btn btn-primary" }, user ? "Save" : "Add user");
+  const sync = () => { tickWrap.hidden = role.value !== "principal"; }; role.onchange = sync; sync();
+  const call = async (body, okText) => {
+    save.disabled = true; msg.textContent = "";
+    const { error } = await SB.functions.invoke("admin", { body });
+    if (error) { save.disabled = false; msg.textContent = await sbErr(error, "Couldn't save. Try again."); return; }
+    msg.className = "muted"; msg.textContent = okText; setTimeout(done, 900);
+  };
+  const form = h("form", { class: "admin-form card", onsubmit: e => {
+    e.preventDefault();
+    const sel = boxes.map(b => b.querySelector("input")).filter(i => i.checked).map(i => i.value);
+    if (!user && !email.value.trim().toLowerCase().endsWith("@gemsedu.in")) { msg.textContent = "Use a @gemsedu.in email."; return; }
+    if (role.value === "principal" && !sel.length) { msg.textContent = "Tick at least one school."; return; }
+    call({ action: "save_user", id: user?.id, email: email.value, name: name.value, role: role.value, schools: sel, active: active.checked },
+      user ? "Saved." : `Added. ${email.value} can now sign in with a code sent to their email.`);
+  } },
+    h("h2", {}, user ? `Edit ${user.name || user.email}` : "Add user"),
+    h("label", {}, "Name", name), h("label", {}, "Email", email), h("label", {}, "Role", role), tickWrap,
+    user ? h("label", { class: "check", style: "display:flex" }, active, " Can sign in") : null,
+    h("div", { class: "row-actions" }, save, h("button", { type: "button", class: "btn btn-outline", onclick: cancel }, "Cancel"),
+      user && user.id !== ME.id ? h("button", { type: "button", class: "btn btn-outline", style: "margin-left:auto;color:var(--poor)", onclick: () => {
+        if (confirm(`Remove ${user.email}? They won't be able to sign in.`)) call({ action: "delete_user", id: user.id }, "Removed.");
+      } }, "Remove user") : null),
+    msg);
+  return form;
+}
+
+function staffCard(staff, schools) {
+  const row = s => {
+    const school = h("select", {}, h("option", { value: "" }, "No school (central)"), schools.map(x => { const o = h("option", { value: x.id }, x.short); if (s.school_id === x.id) o.selected = true; return o; }));
+    const team = h("input", { type: "text", value: s.team || "", placeholder: "e.g. Central desk", size: 12 });
+    const nums = h("input", { type: "text", value: (s.exotel_numbers || []).join(", "), placeholder: "+91…", size: 16 });
+    const btn = h("button", { class: "btn btn-outline", onclick: async () => {
+      btn.disabled = true;
+      const { error } = await SB.from("staff").update({ school_id: school.value || null, team: team.value.trim() || null,
+        exotel_numbers: nums.value.split(",").map(x => x.trim()).filter(Boolean) }).eq("id", s.id);
+      btn.disabled = false; btn.textContent = error ? "Failed" : "Saved ✓";
+    } }, "Save");
+    [school, team, nums].forEach(i => i.oninput = () => { btn.textContent = "Save"; });
+    return h("tr", {}, h("td", {}, h("b", {}, s.name), h("div", { class: "muted small" }, s.email || s.id)), h("td", {}, team), h("td", {}, school), h("td", {}, nums), h("td", {}, btn));
+  };
+  return h("section", { class: "card section" }, h("h2", {}, `Callers (${staff.length})`),
+    h("p", { class: "card-note" }, "Everyone whose calls are audited. Each caller's calls show under the school picked here, so that school's principal sees them. Callers with no school are seen by corporate only. Changes apply straight away. A counsellor who signs in sees their own calls, matched by email."),
+    h("div", { class: "table-wrap staff-table" }, h("table", {}, h("thead", {}, h("tr", {}, ["Caller", "Team", "School", "Exotel numbers", ""].map(x => h("th", {}, x)))),
+      h("tbody", {}, staff.length ? staff.map(row) : h("tr", {}, h("td", { colspan: 5, class: "empty" }, "Callers appear here after the first sync."))))));
+}
+
 /* ---------- boot ---------- */
 (async () => {
-  let mode = "encrypted";
-  try { mode = (await (await fetch("site.json", { cache: "no-store" })).json()).mode; } catch {}
+  let mode = "encrypted", cfg = {};
+  try { cfg = await (await fetch("site.json", { cache: "no-store" })).json(); mode = cfg.mode; } catch {}
+  if (mode === "portal") return bootPortal(cfg);
   if (mode === "plain") { start(await (await fetch("data.json", { cache: "no-store" })).json(),   // load audio into memory so seeking works on any server
     c => fetch(`audio/${c.audio}.mp3`).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); }).then(b => URL.createObjectURL(b))); return; }
   const KEY = "callaudit.unlock", b64 = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0)), u8b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));

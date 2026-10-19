@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Encode+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.png">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -20,6 +21,15 @@
     <button type="submit" id="unlockBtn" class="btn btn-primary btn-block">Unlock</button>
     <div class="err" id="gateErr" role="alert"></div>
   </form>
+  <form id="authForm" hidden>
+    <div class="brand brand-lg"><span class="mark">GEMS</span><span>Call Audit</span></div>
+    <p class="muted" id="authMsg">Sign in with your GEMS email. We'll email you a 6-digit code.</p>
+    <input type="email" id="authEmail" placeholder="name@gemsedu.in" autocomplete="username" required>
+    <input type="text" id="authCode" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" hidden>
+    <button type="submit" id="authBtn" class="btn btn-primary btn-block">Email me a code</button>
+    <div class="auth-links" hidden><a href="#" id="authSwitch">Use a different email</a></div>
+    <div class="err" id="authErr" role="alert"></div>
+  </form>
 </div>
 <header id="top" hidden>
   <div class="top-inner">
@@ -28,7 +38,10 @@
       <a href="#/" data-nav="dashboard">Dashboard</a>
       <a href="#/calls" data-nav="calls">Calls</a>
       <a href="#/counsellors" data-nav="counsellors">Counsellors</a>
+      <a href="#/admin" data-nav="admin" id="navAdmin" hidden>Admin</a>
     </nav>
+    <select id="schoolPick" aria-label="School" hidden></select>
+    <span class="who" id="who" hidden></span>
     <button class="btn btn-ghost-light" id="lock" hidden>Lock</button>
   </div>
 </header>
