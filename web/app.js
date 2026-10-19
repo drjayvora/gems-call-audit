@@ -318,7 +318,8 @@ function route() {
   const [path, query] = (location.hash.slice(1) || "/").split("?"); const parts = path.split("/").filter(Boolean);
   const q = new URLSearchParams(query || ""); const view = $("#view");
   let nodes, nav;
-  if (!parts.length) { nodes = viewDashboard(); nav = "dashboard"; }
+  if (!D.calls.length) nodes = [h("h1", {}, "No calls yet"), h("p", { class: "muted" }, "There are no audited calls for this login yet.")];
+  else if (!parts.length) { nodes = viewDashboard(); nav = "dashboard"; }
   else if (parts[0] === "calls") { nodes = viewCalls(q); nav = "calls"; }
   else if (parts[0] === "call") { nodes = viewCall(parts[1]); nav = "calls"; }
   else if (parts[0] === "counsellors") { nodes = viewCounsellors(); nav = "counsellors"; }

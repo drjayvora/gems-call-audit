@@ -8,10 +8,12 @@
 #   publish.py --rotate                new data keys AND new passwords for everyone; use when someone should lose access
 #   publish.py --passwords             print every login's password
 #   publish.py --out DIR --password-file F --key-file K --schools-file S    build elsewhere (e.g. a test site)
-# Which callers belong to which school: `schools:` in config.yaml, e.g.  schools: {GMS Indirapuram: [neha.s, ...]}
+# Which callers belong to which school comes from the CRM: each user's User Permission on CRM Territory (the school they
+# can see in the CRM). A caller with two schools shows in both. `schools:` in config.yaml can add more, e.g.
+#   schools: {GEMS Millennium School - Indirapuram: [neha.s]}
 # Corporate password and key: ~/.gems_audit_password, ~/.gems_audit_datakey (unchanged from the single-password site).
 # School passwords and keys: ~/.gems_audit_schools.json. All chmod 600, never in git.
-import argparse, base64, gzip, hashlib, hmac, json, os, re, secrets, shutil
+import argparse, base64, gzip, hashlib, hmac, json, os, re, secrets, shutil, urllib.parse, urllib.request
 import yaml
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -40,9 +42,23 @@ def secret_file(path, make):
         old = os.umask(0o077); open(path, "w").write(make()); os.umask(old)
     os.chmod(path, 0o600); return open(path).read().strip()
 
+def crm_schools():   # {school (CRM territory): [caller id]} from User Permission, the same mapping that limits what they see in the CRM
+    tok = os.environ.get("T") or open(os.path.expanduser("~/.gems_crm_token")).read().strip()
+    q = urllib.parse.urlencode({"fields": json.dumps(["user", "for_value"]), "filters": json.dumps([["allow", "=", "CRM Territory"]]), "limit_page_length": 1000})
+    rows = json.load(urllib.request.urlopen(urllib.request.Request(f"https://gemseducation.m.frappe.cloud/api/resource/User%20Permission?{q}", headers={"Authorization": tok}), timeout=60))["data"]
+    out = {}
+    for r in rows: out.setdefault(r["for_value"], []).append(r["user"].split("@")[0])
+    return out
+# Short names for the sign-in list: "GEMS Millennium School - Indirapuram" -> "GMS Indirapuram"
+SHORT = {"GEMS Millennium School": "GMS", "GEMS Modern Academy": "GMA", "GEMS School of Excellence": "GSE", "Little GEMS": "Little GEMS"}
+short = lambda t: (lambda brand, _, place: f"{SHORT.get(brand.strip(), brand.strip())} {place.strip()}" if place else t)(*t.partition(" - "))
+
 cfg = yaml.safe_load(open(P("config.yaml"))) if os.path.exists(P("config.yaml")) else {}
-SCHOOLS = cfg.get("schools") or {}
-school_of = {rep: s for s, reps in SCHOOLS.items() for rep in (reps or [])}
+SCHOOLS = crm_schools()
+for s, reps in (cfg.get("schools") or {}).items(): SCHOOLS.setdefault(s, []).extend(r for r in reps or [] if r not in SCHOOLS[s])
+schools_of = {}
+for s, reps in SCHOOLS.items():
+    for r in reps: schools_of.setdefault(r, []).append(s)
 
 if a.rotate:
     for f in (a.password_file, a.key_file, a.schools_file):
@@ -52,13 +68,15 @@ password = secret_file(a.password_file, new_pw)
 corp_dek = base64.b64decode(secret_file(a.key_file, new_key))
 store = json.loads(secret_file(a.schools_file, lambda: "{}"))
 if a.new_password and a.new_password != "corporate":
-    if a.new_password not in SCHOOLS: raise SystemExit(f"{a.new_password!r} isn't a school in config.yaml (schools: {', '.join(SCHOOLS)})")
+    match = [s for s in SCHOOLS if a.new_password in (s, short(s))]
+    if not match: raise SystemExit(f"{a.new_password!r} isn't a school (schools: {', '.join(map(short, SCHOOLS))})")
+    a.new_password = match[0]
     store.pop(a.new_password, None)   # new password and a new data key, so the old password opens nothing new
 for s in SCHOOLS: store.setdefault(s, {}); store[s].setdefault("password", new_pw()); store[s].setdefault("dek", new_key())
 store.setdefault("_central", {}).setdefault("dek", new_key())   # calls by callers with no school: corporate only
 old = os.umask(0o077); json.dump(store, open(a.schools_file, "w"), indent=1); os.umask(old); os.chmod(a.schools_file, 0o600)
 if a.passwords:
-    print(f"corporate: {password}"); [print(f"{s}: {store[s]['password']}") for s in SCHOOLS]; raise SystemExit
+    print(f"Corporate (all schools): {password}"); [print(f"{short(s)}: {store[s]['password']}") for s in sorted(SCHOOLS, key=short)]; raise SystemExit
 
 KEYS = {"_central": base64.b64decode(store["_central"]["dek"]), **{s: base64.b64decode(store[s]["dek"]) for s in SCHOOLS}}
 enc = lambda key, data: (lambda iv: iv + AESGCM(key).encrypt(iv, data, None))(secrets.token_bytes(12))
@@ -70,21 +88,24 @@ def wrap(pw, payload):   # payload = which data file to open and the data keys i
 
 DATA = build_data(a.rubric, everyone=True)
 for d in ("a", "d", "k"): os.makedirs(os.path.join(a.out, d), exist_ok=True)
-keep = set()
+keep, AUDIO = set(), {}   # AUDIO[(call, school)] = encrypted file name; a caller with two schools gets one copy per school
 for c in DATA["calls"]:
-    c["k"] = school_of.get(c["rep"], "_central")
+    ks = schools_of.get(c["rep"]) or ["_central"]; c["k"] = ks[0]
     src = P("recordings", c["id"] + ".mp3")
     if not os.path.exists(src) or os.path.getsize(src) < 2000: c["audio"] = None; continue
-    name = hmac.new(corp_dek, f"{c['k']}:{c['id']}".encode(), hashlib.sha256).hexdigest()[:24]   # names don't reveal call IDs; a new school means a new file
-    c["audio"] = name; keep.add(name + ".enc")
-    dst = os.path.join(a.out, "a", name + ".enc")
-    if not os.path.exists(dst) or a.rotate or a.new_password or os.path.getmtime(dst) < os.path.getmtime(src):
-        open(dst, "wb").write(enc(KEYS[c["k"]], open(src, "rb").read()))
+    for k in ks:
+        name = hmac.new(corp_dek, f"{k}:{c['id']}".encode(), hashlib.sha256).hexdigest()[:24]   # names don't reveal call IDs; a new school means a new file
+        AUDIO[(c["id"], k)] = name; keep.add(name + ".enc")
+        dst = os.path.join(a.out, "a", name + ".enc")
+        if not os.path.exists(dst) or a.rotate or a.new_password or os.path.getmtime(dst) < os.path.getmtime(src):
+            open(dst, "wb").write(enc(KEYS[k], open(src, "rb").read()))
+    c["audio"] = AUDIO[(c["id"], c["k"])]
 for f in os.listdir(os.path.join(a.out, "a")):
     if f not in keep: os.remove(os.path.join(a.out, "a", f))   # drop recordings no longer published
 
 pack = lambda d: gzip.compress(json.dumps(d, ensure_ascii=False).encode(), mtime=0)
-def subset(calls):   # the same data object, cut down to these calls and the callers who made them
+def subset(calls, s):   # the same data object, cut down to one school's calls (and their copy of each recording)
+    calls = [{**c, "k": s, "audio": AUDIO.get((c["id"], s))} for c in calls]
     reps = {c["rep"] for c in calls}
     return {**DATA, "calls": calls, "counsellors": {k: v for k, v in DATA["counsellors"].items() if k in reps}}
 
@@ -93,11 +114,11 @@ open(os.path.join(a.out, "d", "corporate.enc"), "wb").write(enc(corp_dek, pack(D
 json.dump(wrap(password, {"data": "d/corporate.enc", "data_key": "corporate", "keys": {"corporate": b64(corp_dek), **{k: b64(v) for k, v in KEYS.items()}}}),
           open(os.path.join(a.out, "k", "corporate.json"), "w"))
 counts = {}
-for s in sorted(SCHOOLS):
-    calls = [c for c in DATA["calls"] if c["k"] == s]; counts[s] = len(calls); sid = slug(s)
-    open(os.path.join(a.out, "d", sid + ".enc"), "wb").write(enc(KEYS[s], pack({**subset(calls), "login": s})))
+for s in sorted(SCHOOLS, key=short):
+    calls = [c for c in DATA["calls"] if s in (schools_of.get(c["rep"]) or [])]; counts[short(s)] = len(calls); sid = slug(short(s))
+    open(os.path.join(a.out, "d", sid + ".enc"), "wb").write(enc(KEYS[s], pack({**subset(calls, s), "login": s})))
     json.dump(wrap(store[s]["password"], {"data": f"d/{sid}.enc", "data_key": s, "keys": {s: store[s]["dek"]}}), open(os.path.join(a.out, "k", sid + ".json"), "w"))
-    logins.append({"id": sid, "name": s})
+    logins.append({"id": sid, "name": short(s)})
 live = {l["id"] + ext for l in logins for ext in (".enc", ".json")}
 for d in ("d", "k"):
     for f in os.listdir(os.path.join(a.out, d)):

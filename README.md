@@ -49,18 +49,17 @@ pull_calls.py  →  fetch_recordings.py  →  transcribe.py  →  score.py  → 
 
 **Logins:** the sign-in screen has a list: **Corporate (all schools)** plus one entry per school, each with its own password.
 - Corporate sees every call, including the central desk.
-- A school sees only calls made by its own team: the callers listed under that school in `config.yaml`.
+- A school sees only calls made by its own team. The team comes from the CRM: each user's User Permission on CRM Territory, the same setting that limits which school they see in the CRM. A user with two schools shows in both. `publish.py` reads it fresh every time, so fixing a mapping in the CRM fixes the site on the next publish.
+
+Callers with no school in the CRM (the central desk) are visible to corporate only. To add someone the CRM doesn't map, list them in `config.yaml`:
 
 ```yaml
 schools:
-  GMS Indirapuram: [neha.s, another.counsellor]   # CRM user id = email before the @
-  GMA Kochi: [ligi.m]
+  GEMS Millennium School - Indirapuram: [neha.s]   # CRM territory: [CRM user id = email before the @]
 ```
 
-Callers not listed under any school (the central desk) are visible to corporate only.
-
 - **Publish after scoring:** `.venv/bin/python publish.py`, then commit and push `docs/`. The site updates within a minute or two.
-- **Passwords:** `.venv/bin/python publish.py --passwords` prints them. Corporate's is `~/.gems_audit_password` (the original team password). A school's password is created the first time it appears in `config.yaml`, and all of them are kept in `~/.gems_audit_schools.json`. Share them privately, never in the repo.
+- **Passwords:** `.venv/bin/python publish.py --passwords` prints them. Corporate's is `~/.gems_audit_password` (the original team password). A school's password is created the first time a user is mapped to it, and all of them are kept in `~/.gems_audit_schools.json`. Share them privately, never in the repo.
 - **How it works:** each school's calls and recordings are encrypted with AES-256-GCM under that school's own data key. Central desk calls use a key only corporate holds. `docs/k/<login>.json` holds a login's data keys, wrapped with a key derived from its password (PBKDF2-SHA256, 600,000 iterations). The browser derives the same key, unwraps that login's keys and decrypts locally. A school password can't open another school's data or recordings. Recording file names are keyed hashes, so they don't reveal call IDs.
 - **"Stay unlocked on this device"** keeps that login's keys in the browser until someone clicks **Lock**. Leave it off on shared computers.
 - **Changing access:**
