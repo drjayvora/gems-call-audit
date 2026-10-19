@@ -165,13 +165,15 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--cyan); outl
 #gate form { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 28px 26px; width: 100%; max-width: 400px; box-shadow: 0 12px 32px rgba(4,30,66,.14); border-top: 4px solid var(--yellow); }
 .brand-lg .mark { color: var(--navy); font-size: 24px; } .brand-lg span:last-child { color: var(--navy); font-size: 20px; }
 #gate input[type=password] { width: 100%; padding: 10px 12px; margin: 14px 0 10px; }
+#gate select { width: 100%; padding: 10px 12px; margin-top: 14px; font: inherit; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+.who { color: #BFD3EA; font-size: 13px; white-space: nowrap; }
 #gate .btn { margin-top: 14px; padding: 10px; }
 .err { color: var(--poor); font-size: 14px; min-height: 20px; margin-top: 8px; }
 
 /* Mobile */
 @media (max-width: 640px) {
   h1 { font-size: 22px; } main { padding-top: 18px; }
-  .top-inner { gap: 10px; } .brand span:last-child { display: none; }
+  .top-inner { gap: 10px; } .brand span:last-child { display: none; } .who { display: none; }
   .bar-row { grid-template-columns: 96px 1fr 44px; gap: 8px; font-size: 13px; }
   .line { grid-template-columns: 42px 1fr; } .line .who { grid-column: 2; padding: 0; } .line .txt { grid-column: 2; }
   th, td { padding: 9px 10px; }

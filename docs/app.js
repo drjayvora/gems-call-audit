@@ -1,5 +1,6 @@
 /* GEMS Call Audit – single-page app. Screens: #/ dashboard · #/calls · #/call/<id> · #/counsellors · #/counsellor/<id>
-   Data comes from data.json (local, plain) or data.enc (GitHub Pages, AES-GCM, unlocked with the team password).
+   Data comes from data.json (local, plain) or d/<login>.enc (GitHub Pages, AES-GCM). Each login (corporate, or one school)
+   has its own password, which unwraps only that login's data keys: a school sees only calls made by its own team.
    Design rule: visuals first, words second – short labels, details on hover or behind "show more". */
 "use strict";
 const $ = s => document.querySelector(s);
@@ -317,7 +318,8 @@ function route() {
   const [path, query] = (location.hash.slice(1) || "/").split("?"); const parts = path.split("/").filter(Boolean);
   const q = new URLSearchParams(query || ""); const view = $("#view");
   let nodes, nav;
-  if (!parts.length) { nodes = viewDashboard(); nav = "dashboard"; }
+  if (!D.calls.length) nodes = [h("h1", {}, "No calls yet"), h("p", { class: "muted" }, "There are no audited calls for this login yet.")];
+  else if (!parts.length) { nodes = viewDashboard(); nav = "dashboard"; }
   else if (parts[0] === "calls") { nodes = viewCalls(q); nav = "calls"; }
   else if (parts[0] === "call") { nodes = viewCall(parts[1]); nav = "calls"; }
   else if (parts[0] === "counsellors") { nodes = viewCounsellors(); nav = "counsellors"; }
@@ -336,39 +338,45 @@ function start(data, audioUrl) {
 
 /* ---------- boot ---------- */
 (async () => {
-  let mode = "encrypted";
-  try { mode = (await (await fetch("site.json", { cache: "no-store" })).json()).mode; } catch {}
-  if (mode === "plain") { start(await (await fetch("data.json", { cache: "no-store" })).json(),   // load audio into memory so seeking works on any server
+  let site = { mode: "encrypted" };
+  try { site = await (await fetch("site.json", { cache: "no-store" })).json(); } catch {}
+  if (site.mode === "plain") { start(await (await fetch("data.json", { cache: "no-store" })).json(),   // load audio into memory so seeking works on any server
     c => fetch(`audio/${c.audio}.mp3`).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); }).then(b => URL.createObjectURL(b))); return; }
-  const KEY = "callaudit.unlock", b64 = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0)), u8b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
-  let DEK;
+  const KEY = "callaudit.unlock2", b64 = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+  const logins = site.logins || [], sel = $("#login");
+  sel.replaceChildren(...logins.map(l => h("option", { value: l.id }, l.name))); sel.hidden = logins.length < 2;
+  const last = store.get("callaudit.login", ""); if (logins.some(l => l.id === last)) sel.value = last;
+  let KEYS = {};
   const get = async u => { const r = await fetch(u, { cache: "no-store" }); if (!r.ok) throw new Error(`${u}: ${r.status}`); return r; };
-  const dec = async u => { const b = new Uint8Array(await (await get(u)).arrayBuffer()); return crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(0, 12) }, DEK, b.slice(12)); };
-  async function unwrap(pass) {   // password -> PBKDF2 -> key-encryption key -> data key (throws DOMException if the password is wrong)
-    const k = await (await get("key.json")).json();
+  const dec = async (u, k) => { const b = new Uint8Array(await (await get(u)).arrayBuffer()); return crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(0, 12) }, KEYS[k], b.slice(12)); };
+  async function unwrap(id, pass) {   // password -> PBKDF2 -> key-encryption key -> this login's data keys (throws DOMException if the password is wrong)
+    const k = await (await get(`k/${id}.json`)).json();
     const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
     const kek = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64(k.salt), iterations: k.iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-    return crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(k.iv) }, kek, b64(k.wrapped));
+    return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(k.iv) }, kek, b64(k.wrapped))));
   }
-  async function open(raw) {
-    DEK = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
-    const gz = await dec("data.enc");
+  async function open(id, payload) {
+    KEYS = {};
+    for (const [name, raw] of Object.entries(payload.keys)) KEYS[name] = await crypto.subtle.importKey("raw", b64(raw), "AES-GCM", false, ["decrypt"]);
+    const gz = await dec(payload.data, payload.data_key);
     const data = JSON.parse(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+    $("#who").hidden = false; $("#who").textContent = (logins.find(l => l.id === id) || {}).name || "";
     $("#lock").hidden = false;
     $("#lock").onclick = () => { try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch {} location.hash = ""; location.reload(); };
-    start(data, c => dec(`a/${c.audio}.enc`).then(b => URL.createObjectURL(new Blob([b], { type: "audio/mpeg" }))));
+    start(data, c => dec(`a/${c.audio}.enc`, c.k).then(b => URL.createObjectURL(new Blob([b], { type: "audio/mpeg" }))));
   }
   const showGate = msg => { $("#gate").hidden = false; $("#gateErr").textContent = msg || ""; $("#pw").focus(); };
   const reset = () => { const b = $("#unlockBtn"); b.disabled = false; b.textContent = "Unlock"; };
   $("#gateForm").onsubmit = async e => {
     e.preventDefault(); const b = $("#unlockBtn"); b.disabled = true; b.textContent = "Unlocking…"; $("#gateErr").textContent = "";
-    let raw;
-    try { raw = await unwrap($("#pw").value); }
-    catch (err) { reset(); return showGate(err instanceof DOMException ? "Wrong password." : "Couldn't reach the site's data. Check your connection and try again."); }
-    try { ($("#remember").checked ? localStorage : sessionStorage).setItem(KEY, u8b64(raw)); } catch {}
-    try { await open(raw); } catch { reset(); showGate("The data couldn't be decrypted. The site may be mid-update; reload in a minute."); }
+    const id = sel.value || "corporate"; let payload;
+    try { payload = await unwrap(id, $("#pw").value); }
+    catch (err) { reset(); return showGate(err instanceof DOMException ? "Wrong password for this login." : "Couldn't reach the site's data. Check your connection and try again."); }
+    store.set("callaudit.login", id);
+    try { ($("#remember").checked ? localStorage : sessionStorage).setItem(KEY, JSON.stringify({ id, payload })); } catch {}
+    try { await open(id, payload); } catch { reset(); showGate("The data couldn't be decrypted. The site may be mid-update; reload in a minute."); }
   };
-  let saved = null; try { saved = sessionStorage.getItem(KEY) || localStorage.getItem(KEY); } catch {}
-  if (saved) open(b64(saved)).catch(() => { try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch {} showGate("Please enter the password again."); });
+  let saved = null; try { saved = JSON.parse(sessionStorage.getItem(KEY) || localStorage.getItem(KEY) || "null"); } catch {}
+  if (saved) open(saved.id, saved.payload).catch(() => { try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch {} showGate("Please enter the password again."); });
   else showGate();
 })();
